@@ -1,0 +1,32 @@
+SESLI ARAMA (STT) - ANDROID TV KURULUMU
+=======================================
+
+Kumandadaki asistan / mikrofon tusuna basinca bu uygulama acilir: konusursun, sonuc yazilir
+ya da SmartTube / Nuvio'da aranir, "hava durumu" dersen hava paneli gelir.
+Uygulama Turkce ve Ingilizce konusur (Ayarlar - Arayuz dili). English guide: README.txt
+
+HAZIRLIK (bir kerelik, TV'de)
+1. Ayarlar - Cihaz tercihleri - Hakkinda - "Derleme" satirina 7 kez OK bas (gelistirici modu acilir).
+2. Ayarlar - Cihaz tercihleri - Gelistirici secenekleri - "USB hata ayiklama" ve varsa
+   "Ag hata ayiklama" ACIK yap.
+3. TV'nin IP adresini not et (Ayarlar - Ag ve Internet - bagli oldugun ag).
+4. Istersen ucretsiz Groq API anahtari al: https://console.groq.com/keys
+
+KURULUM (Windows 10 / 11 bilgisayarda; TV ile ayni agda olmali)
+1. Bu zip'in icindekileri bir klasore cikar (hepsi ayni klasorde kalsin).
+2. kurulum.bat dosyasina cift tikla (install.bat ayni kurulumdur; dil Windows'a gore secilir: Turkce / English).
+3. TV'nin IP adresini yaz. Ilk baglanista TV'de "USB hata ayiklamaya izin ver?" cikarsa
+   "Her zaman izin ver" kutusunu isaretleyip Tamam de.
+4. Groq anahtarini yapistir (bos birakirsan uygulamadan sonra girersin).
+5. "KURULUM TAMAM" yazisini gorunce kumandanin asistan tusuna bas.
+
+KALDIRMAK / ESKI HALINE DONMEK
+Komut satirindan: kurulum.bat kaldir   (English: install.bat uninstall)
+(Asistan ayarlarini kurulumdan onceki haline getirir ve uygulamayi siler.)
+
+SORUN OLURSA
+- kurulum.log dosyasi neler yapildigini gosterir.
+- Tusa basinca hicbir sey olmuyorsa TV'yi yeniden baslatip kurulum.bat'i tekrar calistir.
+- Ses, sectigin API saglayicisina (varsayilan Groq) gonderilir; mikrofon yalniz dinleme ekrani aciksa kullanilir.
+
+Lisans: GPL-3.0. Kaynak kodu ve ayrintilar GitHub sayfasinda.

@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.voiceasistanttv.stt'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.voiceasistanttv.stt'
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Kişisel kullanım: debug anahtarıyla imzala, böylece doğrudan kurulabilir.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    lint {
+        abortOnError false
+    }
+}
+
+dependencies {
+    // Bilerek boş: sadece Android framework API'leri kullanılıyor (hafif uygulama).
+}

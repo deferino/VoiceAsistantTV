@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 11+: RecognitionService'i çağıran uygulamanın mikrofon iznini sorgulayabilmek için gerekli
+         (Sayboard'daki aynı çözüm). Kişisel/yan yükleme kullanımı için uygundur. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
+
+    <application
+        android:name=".App"
+        android:allowBackup="false"
+        android:banner="@drawable/banner"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Material.NoActionBar"
+        android:usesCleartextTraffic="true"
+        tools:targetApi="34">
+
+        <!-- Ayar ekranı: kumandanın yön tuşları ve OK ile tamamen kullanılabilir -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Dinleme ekranı: asistan tuşu / ASSIST isteği bunu açar -->
+        <activity
+            android:name=".AssistActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:screenOrientation="landscape"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEARCH_LONG_PRESS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- RecognizerIntent kullanan uygulamalar için: sonucu çağırana geri döndürür -->
+            <intent-filter>
+                <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Kumanda tuş testi (hangi tuş hangi kodu gönderiyor?) -->
+        <activity
+            android:name=".KeyTestActivity"
+            android:exported="false"
+            android:screenOrientation="landscape" />
+
+        <!-- Varsayılan asistan olarak atanabilen servis (kumandadaki asistan tuşunu devralır) -->
+        <service
+            android:name=".AssistService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".AssistSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <!-- Uygulamaların SpeechRecognizer API'si ile kullandığı sistem tanıyıcısı -->
+        <service
+            android:name=".CloudRecognitionService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.RECORD_AUDIO">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
+
+        <!-- Kurulum betiğinin (adb shell) API anahtarı/ayar göndermesi için. Yalnız android.permission.DUMP
+             sahibi gönderebilir (adb shell'de var; normal uygulamalarda yok) → başka uygulama ayar değiştiremez. -->
+        <receiver
+            android:name=".ConfigReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.voiceasistanttv.stt.CONFIG" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Çevrilen metni odaktaki metin alanına yazan erişilebilirlik servisi (isteğe bağlı) -->
+        <service
+            android:name=".InjectorService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
+        </service>
+    </application>
+</manifest>

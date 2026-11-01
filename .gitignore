@@ -1,0 +1,37 @@
+# ---- build / IDE ----
+/.gradle
+/build
+/app/build
+/local.properties
+*.iml
+.idea
+/.idea
+.DS_Store
+Thumbs.db
+
+# ---- private / per-machine (TV address, API keys, logs) ----
+/tv.txt
+/scripts/tv.txt
+/config.json
+/kurulum.log
+/logs
+*.log
+/platform-tools
+*.jks
+*.keystore
+keystore.properties
+.env
+
+# ---- build outputs: publish via GitHub Releases, not in the repo ----
+/dist
+*.apk
+*.aab
+*.zip
+
+# ---- developer-only helpers (contain the developer's own TV address/test scripts) ----
+/tools
+/_to_delete
+/_github
+
+# ---- one-click upload helper (not part of the project) ----
+/GITHUB-YUKLE.bat
