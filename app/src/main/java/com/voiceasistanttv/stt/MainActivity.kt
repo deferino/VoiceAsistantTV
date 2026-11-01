@@ -22,8 +22,8 @@ import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * Ayar ekranı. Yalnızca kumandanın yön tuşları + OK ile kullanılacak şekilde tasarlandı:
- * her satır odaklanabilir, odaktaki satır belirgin çerçeveyle vurgulanır.
+ * Settings screen. Designed to be used only with the remote's D-pad + OK:
+ * every row is focusable and the focused row is highlighted with a clear frame.
  */
 class MainActivity : Activity() {
     private lateinit var list: LinearLayout
@@ -52,7 +52,7 @@ class MainActivity : Activity() {
         render()
     }
 
-    // ------------------------------------------------------------------ arayüz
+    // ------------------------------------------------------------------ UI
 
     private fun render() {
         list.removeAllViews()
@@ -227,7 +227,7 @@ class MainActivity : Activity() {
         rows.add(r)
     }
 
-    // ------------------------------------------------------------------ iletişim kutuları
+    // ------------------------------------------------------------------ dialogs
 
     private fun builder(): AlertDialog.Builder =
         AlertDialog.Builder(this, android.R.style.Theme_Material_Dialog_Alert)
@@ -272,7 +272,7 @@ class MainActivity : Activity() {
         builder().setTitle(title).setMessage(text).setPositiveButton(Lang.s(R.string.btn_ok), null).show()
     }
 
-    // ------------------------------------------------------------------ durum
+    // ------------------------------------------------------------------ state
 
     private val targets get() = listOf(
         Config.TARGET_BOTH to Lang.s(R.string.target_both),
@@ -288,7 +288,7 @@ class MainActivity : Activity() {
         choose(Lang.s(R.string.dlg_target), targets.map { it.second }, sel) { Config.searchTarget = targets[it].first }
     }
 
-    /** Paket seçimi satırının alt yazısı: otomatik mi / hangi paket, kurulu mu. */
+    /** Subtitle of the package-selection row: automatic or which package, installed or not. */
     private fun pkgStatus(chosen: String, choices: List<AppLauncher.AppChoice>, resolved: String?): String =
         if (chosen.isEmpty()) {
             if (resolved != null) Lang.s(R.string.pkg_auto_found, resolved) else Lang.s(R.string.pkg_auto_none)
@@ -303,7 +303,7 @@ class MainActivity : Activity() {
     private fun nuvioStatus(): String =
         pkgStatus(Config.nuvioPkg, AppLauncher.NUVIO_CHOICES, AppLauncher.nuvioPackage(this))
 
-    /** Hazır listeden seç, "Otomatik" ya da elle paket adı yaz. */
+    /** Pick from the ready-made list, "Automatic", or type a package name by hand. */
     private fun pickPackage(
         title: String, choices: List<AppLauncher.AppChoice>, current: String, onSet: (String) -> Unit
     ) {
@@ -449,7 +449,7 @@ class MainActivity : Activity() {
         }
     }
 
-    // ------------------------------------------------------------------ API ayarları
+    // ------------------------------------------------------------------ API settings
 
     private fun maskKey(k: String): String = when {
         k.isBlank() -> Lang.s(R.string.not_set)
@@ -527,7 +527,7 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    // ------------------------------------------------------------------ dinleme ayarları
+    // ------------------------------------------------------------------ listening settings
 
     private fun cycleSilence() {
         val v = listOf(800, 1200, 1800, 2500)
@@ -612,7 +612,7 @@ class MainActivity : Activity() {
         message(Lang.s(R.string.dlg_devices), text + "\n\n" + Lang.s(R.string.dev_note))
     }
 
-    // ------------------------------------------------------------------ adb yardımı
+    // ------------------------------------------------------------------ adb help
 
     private fun showAdbHelp() {
         val pkg = packageName

@@ -1,5 +1,5 @@
 @echo off
-rem Sadece asistan/tanima/erisilebilirlik atamasini yeniden uygular (APK kurmaz). Ayarlar geri alinirsa bunu calistir.
+rem Re-applies only the assistant / recognition / accessibility assignment (does not install the APK). Run it if the settings get reverted.
 setlocal EnableExtensions
 cd /d "%~dp0.."
 if not exist logs mkdir logs
@@ -15,13 +15,13 @@ if not defined ADB goto noadb
 "%ADB%" connect %TV% >> "%LOG%" 2>&1
 "%ADB%" -s %TV% push scripts\tv-setup.sh /data/local/tmp/vt-setup.sh >> "%LOG%" 2>&1
 "%ADB%" -s %TV% shell sh /data/local/tmp/vt-setup.sh >> "%LOG%" 2>&1
-echo Tamam. Ayrinti: %LOG%
+echo Done. Details: %LOG%
 goto end
 :notv
-echo scripts\tv.txt yok.
+echo scripts\tv.txt not found.
 goto end
 :noadb
-echo adb bulunamadi.
+echo adb not found.
 :end
 if /i "%~1"=="auto" exit /b 0
 pause

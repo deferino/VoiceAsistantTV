@@ -13,7 +13,7 @@ Thumbs.db
 /tv.txt
 /scripts/tv.txt
 /config.json
-/kurulum.log
+/install.log
 /logs
 *.log
 /platform-tools
@@ -34,4 +34,4 @@ keystore.properties
 /_github
 
 # ---- one-click upload helper (not part of the project) ----
-/GITHUB-YUKLE.bat
+/PUSH-TO-GITHUB.bat

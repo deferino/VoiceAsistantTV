@@ -15,26 +15,26 @@ import android.os.SystemClock
 import android.util.Log
 
 /**
- * Tek bir konuşmayı kaydeder, sessizlik tespitiyle bitirir ve bulut STT'ye gönderir.
- * Sayboard'daki MySpeechService/Recognizer soyutlamasının sadeleştirilmiş, Vosk'suz karşılığıdır.
+ * Records a single utterance, ends it with silence detection and sends it to the cloud STT.
+ * A simplified, Vosk-free counterpart of Sayboard's MySpeechService/Recognizer abstraction.
  *
- * Tüm Listener çağrıları ana iş parçacığında yapılır. Model yüklemesi yok: boşta RAM maliyeti ~0.
+ * All Listener calls are made on the main thread. There is no model loading: idle RAM cost is ~0.
  */
 class Transcriber(
     private val context: Context,
     private val attribution: Context? = null,
     private val languageOverride: String? = null,
-    /** Tani satirlarinda hangi yolun kaydettigini gostermek icin ("asistan" | "klavye"). */
-    private val tag: String = "asistan",
-    /** null = Config.vadThreshold. Dusuk sesli (uzak mikrofon) kaynaklar icin daha dusuk taban verilir. */
+    /** Shows in the diagnostic lines which path made the recording ("assist" | "keyboard"). */
+    private val tag: String = "assist",
+    /** null = Config.vadThreshold. Quiet (far-field microphone) sources get a lower floor. */
     private val vadFloor: Int? = null,
     /**
-     * Uzak alan (TV'nin yerlesik) mikrofonu: konusma cok daha sessiz gelir. Gurultu tabani en sessiz
-     * ilk cerceveden olculur (konusma hemen baslasa da sismez), esik gurultunun 3 kati, klip basina/
-     * sonuna daha fazla pay birakilir. Kumanda mikrofonu yolu (AssistActivity) bunu KULLANMAZ.
+     * Far-field (the TV's built-in) microphone: speech arrives much quieter. The noise floor is measured
+     * from the quietest first frame (so it does not inflate even if speech starts right away), the threshold is 3x the noise,
+     * and more padding is left at the start/end of the clip. The remote-microphone path (AssistActivity) does NOT use this.
      */
     private val farField: Boolean = false,
-    /** null = Config.audioSource; deneme icin (Config.kbAudioSource). */
+    /** null = Config.audioSource; for experiments (Config.kbAudioSource). */
     private val sourceOverride: String? = null
 ) {
     enum class Code { NO_PERMISSION, MIC_UNAVAILABLE, NO_SPEECH, EMPTY, NETWORK, API, CONFIG }
@@ -60,19 +60,19 @@ class Transcriber(
     @Volatile
     private var started = false
 
-    /** Kaydı başlatır (arka plan iş parçacığında). */
+    /** Starts recording (on a background thread). */
     fun start(l: Listener) {
         if (started) return
         started = true
         Thread({ runCapture(l) }, "VoiceTV-capture").start()
     }
 
-    /** Kullanıcı bitirdi: kaydı kapat ve çevir. */
+    /** The user is done: close the recording and transcribe. */
     fun stopNow() {
         stopRequested = true
     }
 
-    /** Her şeyi iptal et, geri çağrı yapılmaz. */
+    /** Cancels everything; no callback is made. */
     fun cancel() {
         cancelled = true
         stopRequested = true
@@ -84,7 +84,7 @@ class Transcriber(
     }
 
     private fun fail(l: Listener, code: Code, msg: String) {
-        Log.w(TAG, "hata $code: $msg")
+        Log.w(TAG, "error $code: $msg")
         post { l.onError(code, msg) }
     }
 
@@ -116,8 +116,8 @@ class Transcriber(
         var firstSpeech = -1
         var lastSpeech = -1
         var peak = 0
-        // Her ~100 ms'lik cercevenin baslangic ornegi ve seviyesi: konusmanin sessiz baslangicini
-        // ("mer-haba" daki m/e/r) esigin altinda kalsa da geriye dogru bulabilmek icin.
+        // Start sample and level of every ~100 ms frame: so that the quiet start of speech
+        // (the m/e/r in "mer-haba") can still be found backwards even if it stays below the threshold.
         val lvlStart = IntArray(maxSamples / 100 + 64)
         val lvlVal = IntArray(lvlStart.size)
         var firstSpeechFrame = -1
@@ -135,7 +135,7 @@ class Transcriber(
                 return
             }
             post { l.onReady() }
-            diag("basla[$tag]: kaynak=${sourceOverride?.takeIf { it.isNotBlank() } ?: Config.audioSource} girisler=[${inputList()}] esik-tabani=${minThreshold.toInt()}")
+            diag("start[$tag]: source=${sourceOverride?.takeIf { it.isNotBlank() } ?: Config.audioSource} inputs=[${inputList()}] threshold-floor=${minThreshold.toInt()}")
 
             while (!cancelled) {
                 val r = rec.read(buf, 0, frame)
@@ -152,7 +152,7 @@ class Transcriber(
                 if (level > peak) peak = level
                 frames++
                 if (frames == 6) {
-                    diag("yonlendirme[$tag]: ${routeInfo(rec)}")
+                    diag("routing[$tag]: ${routeInfo(rec)}")
                     routeShort = routeShortName(rec)
                 }
                 if (frames <= lvlStart.size) {
@@ -161,7 +161,7 @@ class Transcriber(
                 }
                 val threshold = maxOf(minThreshold, noise * noiseMul)
                 val loud = level > threshold
-                // İlk 300 ms ortam gürültüsünü ölç, sonra yavaşça güncelle
+                // Measure the ambient noise over the first 300 ms, then update slowly
                 if (frames <= 3) {
                     noise = if (farField) (if (frames == 1) level.toDouble() else minOf(noise, level.toDouble()))
                     else maxOf(noise, level.toDouble())
@@ -200,15 +200,15 @@ class Transcriber(
         if (cancelled) return
 
         diag(
-            "kayit[$tag]: ${n * 1000L / SAMPLE_RATE} ms, konusma=$speaking, elle-durdu=$stopRequested, " +
-                "tepe=$peak, gurultu=${noise.toInt()}, esik=${maxOf(minThreshold, noise * noiseMul).toInt()}"
+            "record[$tag]: ${n * 1000L / SAMPLE_RATE} ms, speech=$speaking, manual-stop=$stopRequested, " +
+                "peak=$peak, noise=${noise.toInt()}, threshold=${maxOf(minThreshold, noise * noiseMul).toInt()}"
         )
         if (!speaking && !stopRequested) {
             fail(l, Code.NO_SPEECH, Lang.s(R.string.err_no_speech, peak))
             return
         }
-        // Esik ("loud") konusmanin ilk sessiz seslerini kesiyordu ("merhaba" -> "haba"). Konusma
-        // basladigi cercevenin onundeki, ortam gurultusunun belirgin ustundeki cerceveleri de kat.
+        // The threshold ("loud") was cutting off the first quiet sounds of speech ("merhaba" -> "haba"). Also include
+        // the frames just before the frame where speech started that are clearly above the ambient noise.
         var startSample = firstSpeech
         var back = 0
         if (firstSpeechFrame > 0) {
@@ -229,7 +229,7 @@ class Transcriber(
             return
         }
 
-        diag("gonderilen klip: ${(to - from) * 1000L / SAMPLE_RATE} ms (geri-adim=$back, aralik=${from * 1000L / SAMPLE_RATE}-${to * 1000L / SAMPLE_RATE} ms)")
+        diag("sent clip: ${(to - from) * 1000L / SAMPLE_RATE} ms (back-step=$back, range=${from * 1000L / SAMPLE_RATE}-${to * 1000L / SAMPLE_RATE} ms)")
         saveDebugClip(pcm, n, routeShort)
         post { l.onProcessing() }
         val wav = Wav.encode(pcm, from, to, SAMPLE_RATE)
@@ -241,7 +241,7 @@ class Transcriber(
         when (res) {
             is SttClient.Result.Ok -> {
                 val text = res.text.trim()
-                diag("sonuc: ${text.length} karakter", " -> $text")
+                diag("result: ${text.length} chars", " -> $text")
                 if (text.isEmpty()) fail(l, Code.EMPTY, Lang.s(R.string.err_not_understood))
                 else post { l.onResult(text) }
             }
@@ -251,8 +251,8 @@ class Transcriber(
     }
 
     /**
-     * Tani satiri: logcat'e yazar; yalnizca debug surumde ayrica files/diag.log'a ekler (en fazla ~64 KB)
-     * ve metni de icerir. Surum (release) derlemesinde metin hicbir yere yazilmaz.
+     * Diagnostic line: writes to logcat; in debug builds only, it is also appended to files/diag.log (at most ~64 KB)
+     * and includes the text. In release builds the text is never written anywhere.
      */
     private fun diag(msg: String, debugExtra: String = "") {
         val debuggable =
@@ -270,18 +270,18 @@ class Transcriber(
     }
 
     private fun typeName(t: Int): String = when (t) {
-        AudioDeviceInfo.TYPE_BUILTIN_MIC -> "yerlesik-mik"
+        AudioDeviceInfo.TYPE_BUILTIN_MIC -> "builtin-mic"
         AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> "bt-sco"
-        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "kablolu"
+        AudioDeviceInfo.TYPE_WIRED_HEADSET -> "wired"
         AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_HEADSET -> "usb"
         AudioDeviceInfo.TYPE_TV_TUNER -> "tuner"
         AudioDeviceInfo.TYPE_HDMI -> "hdmi"
-        26 -> "ble-kulaklik"
-        else -> "tip$t"
+        26 -> "ble-headset"
+        else -> "type$t"
     }
 
     private fun describe(d: AudioDeviceInfo?): String =
-        if (d == null) "yok" else "${typeName(d.type)}(id=${d.id}, ${d.productName})"
+        if (d == null) "none" else "${typeName(d.type)}(id=${d.id}, ${d.productName})"
 
     private fun inputList(): String = try {
         val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -290,14 +290,14 @@ class Transcriber(
         "?"
     }
 
-    /** Hangi mikrofon cihazindan kayit alindigi (yonlendirme asenkron: birkac cerceve sonra okunur). */
+    /** Which microphone device the recording came from (routing is asynchronous: read a few frames later). */
     private fun routeInfo(rec: AudioRecord): String {
-        val sb = StringBuilder("cihaz=").append(describe(rec.routedDevice))
+        val sb = StringBuilder("device=").append(describe(rec.routedDevice))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 val c = rec.activeRecordingConfiguration
-                if (c != null) sb.append(", sessiz-alindi=").append(c.isClientSilenced)
-                    .append(", kaynak=").append(c.clientAudioSource)
+                if (c != null) sb.append(", silenced=").append(c.isClientSilenced)
+                    .append(", source=").append(c.clientAudioSource)
             } catch (e: Exception) {
             }
         }
@@ -308,11 +308,11 @@ class Transcriber(
         AudioDeviceInfo.TYPE_BUILTIN_MIC -> "mic"
         25 -> "submix"
         26 -> "ble"
-        null -> "yok"
-        else -> "tip${rec.routedDevice?.type}"
+        null -> "none"
+        else -> "type${rec.routedDevice?.type}"
     }
 
-    /** Yalnizca debug surum: tum ham kaydi files/clip-<yol>-<n>-<kaynak>.wav olarak saklar (son 8). */
+    /** Debug builds only: keeps the whole raw recording as files/clip-<path>-<n>-<source>.wav (last 8). */
     private fun saveDebugClip(pcm: ShortArray, n: Int, route: String) {
         val debuggable =
             (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -349,7 +349,7 @@ class Transcriber(
         val minBuf = AudioRecord.getMinBufferSize(
             SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         )
-        val bytes = maxOf(minBuf, SAMPLE_RATE * 2) // en az 1 sn
+        val bytes = maxOf(minBuf, SAMPLE_RATE * 2) // at least 1 s
         return try {
             val b = AudioRecord.Builder()
                 .setAudioSource(source)
@@ -370,7 +370,7 @@ class Transcriber(
                 null
             } else rec
         } catch (e: Exception) {
-            Log.w(TAG, "AudioRecord oluşturulamadı (kaynak $source): ${e.message}")
+            Log.w(TAG, "Could not create AudioRecord (source $source): ${e.message}")
             null
         }
     }
@@ -378,7 +378,7 @@ class Transcriber(
     private fun createRecord(): AudioRecord? {
         val preferred = sourceId(sourceOverride?.takeIf { it.isNotBlank() } ?: Config.audioSource)
         val rec = build(preferred) ?: if (preferred != MediaRecorder.AudioSource.MIC) {
-            Log.w(TAG, "Seçili ses kaynağı açılamadı, MIC deneniyor")
+            Log.w(TAG, "Selected audio source could not be opened, trying MIC")
             build(MediaRecorder.AudioSource.MIC)
         } else null
         if (rec != null && Config.inputDeviceId != 0) {
@@ -386,7 +386,7 @@ class Transcriber(
             val dev: AudioDeviceInfo? =
                 am.getDevices(AudioManager.GET_DEVICES_INPUTS).firstOrNull { it.id == Config.inputDeviceId }
             if (dev != null) rec.preferredDevice = dev
-            else Log.w(TAG, "Seçili mikrofon cihazı bulunamadı, varsayılan kullanılıyor")
+            else Log.w(TAG, "Selected microphone device not found, using the default")
         }
         return rec
     }

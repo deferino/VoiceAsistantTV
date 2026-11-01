@@ -3,7 +3,7 @@ package com.voiceasistanttv.stt
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** 16-bit mono PCM -> WAV (RIFF) dönüştürücü. */
+/** 16-bit mono PCM -> WAV (RIFF) converter. */
 object Wav {
     fun encode(pcm: ShortArray, from: Int, to: Int, sampleRate: Int): ByteArray {
         val samples = to - from

@@ -9,18 +9,18 @@ import android.service.voice.VoiceInteractionSession
 import android.service.voice.VoiceInteractionSessionService
 
 /**
- * Bu uygulama varsayılan "asistan" olarak atandığında kumandadaki asistan/mikrofon tuşu
- * Google Asistan yerine buraya gelir ve dinleme ekranını (AssistActivity) açar.
- * Atama komutları: kurulum.bat (veya uygulamadaki "Kurulum komutları").
+ * When this app is set as the default "assistant", the remote's assistant/microphone key
+ * comes here instead of Google Assistant and opens the listening screen (AssistActivity).
+ * Assignment commands: install.bat (or "Setup commands" in the app).
  */
 class AssistService : VoiceInteractionService() {
     override fun onReady() {
         super.onReady()
-        Log.i(TAG, "AssistService hazır: varsayılan asistan olarak bağlandık")
+        Log.i(TAG, "AssistService ready: bound as the default assistant")
     }
 
     override fun onShutdown() {
-        Log.i(TAG, "AssistService kapandı")
+        Log.i(TAG, "AssistService stopped")
         super.onShutdown()
     }
 }
@@ -29,7 +29,7 @@ private const val TAG = "VoiceTV"
 
 class AssistSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession {
-        Log.i(TAG, "yeni asistan oturumu")
+        Log.i(TAG, "new assistant session")
         return AssistSession(this)
     }
 }
@@ -37,19 +37,19 @@ class AssistSessionService : VoiceInteractionSessionService() {
 class AssistSession(context: Context) : VoiceInteractionSession(context) {
     override fun onCreate() {
         super.onCreate()
-        // Kendi penceresini çizme; arayüzü AssistActivity gösterecek.
+        // Do not draw our own window; AssistActivity will show the UI.
         setUiEnabled(false)
     }
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
-        Log.i(TAG, "asistan tuşu geldi: onShow showFlags=$showFlags")
+        Log.i(TAG, "assistant key received: onShow showFlags=$showFlags")
         current = this
-        // Klavye ekrandaysa dikteyi o baslatir/bitirir. Karar ANINDA verilir: klavye gorunmuyorsa
-        // dinleme ekrani eskisi gibi hemen (bu cagri icinde) acilir. Asenkron bir yanit beklemek,
-        // oturum arada sistem tarafindan gizlenirse "hidden session" hatasina yol aciyordu.
+        // If a keyboard is on screen, it starts/ends dictation. The decision is made IMMEDIATELY: if no keyboard is visible,
+        // the listening screen opens right away as before (inside this call). Waiting for an asynchronous answer
+        // could cause a "hidden session" error if the system hid the session in between.
         val kb = InjectorService.instance?.isKeyboardWindowShown()
-        Log.i(TAG, "klavye penceresi gorunur=$kb")
+        Log.i(TAG, "keyboard window visible=$kb")
         if (kb == true) {
             KeyboardHandoff.offer(context) { handled ->
                 if (handled) {
@@ -70,18 +70,18 @@ class AssistSession(context: Context) : VoiceInteractionSession(context) {
         try {
             startAssistantActivity(intent)
         } catch (e: Exception) {
-            Log.w(TAG, "dinleme ekrani acilamadi (oturum): ${e.message}")
+            Log.w(TAG, "could not open the listening screen (session): ${e.message}")
             try {
                 context.startActivity(Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             } catch (e2: Exception) {
-                Log.w(TAG, "dinleme ekrani acilamadi (dogrudan): ${e2.message}")
+                Log.w(TAG, "could not open the listening screen (direct): ${e2.message}")
             }
         }
     }
 
     override fun onHide() {
         super.onHide()
-        Log.i(TAG, "oturum gizlendi (onHide)")
+        Log.i(TAG, "session hidden (onHide)")
         if (current === this) current = null
     }
 
@@ -89,7 +89,7 @@ class AssistSession(context: Context) : VoiceInteractionSession(context) {
         @Volatile
         var current: AssistSession? = null
 
-        /** Dinleme ekranı kapanınca oturumu da kapat. */
+        /** Also close the session when the listening screen closes. */
         fun close() {
             try {
                 current?.hide()

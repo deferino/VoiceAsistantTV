@@ -8,14 +8,14 @@ import java.net.InetAddress
 import java.net.URL
 
 /**
- * Kullanıcı konuşurken, sonra gerekecek sunuculara boş bir HEAD isteği atıp bağlantıyı (DNS + TCP + TLS) açık tutar.
- * Böylece konuşma bitince STT ve arama istekleri hazır bağlantıyı kullanır (TV'de soğuk TMDB isteği ~4,5 sn sürebiliyordu).
- * Hiçbir kullanıcı verisi gönderilmez; yalnızca sunucu köküne HEAD yapılır.
+ * While the user speaks, sends an empty HEAD request to the servers needed next and keeps the connection (DNS + TCP + TLS) open.
+ * That way, when speech ends, the STT and search requests reuse a ready connection (a cold TMDB request could take ~4.5 s on the TV).
+ * No user data is sent; only a HEAD request to the server root.
  */
 object Prewarm {
     private const val TAG = "VoiceTV"
 
-    /** @param withSearch arama sunucularını da ısıt (yalnız asistan yolunda; uygulamalardan gelen dikte isteğinde değil). */
+    /** @param withSearch also warm up the search servers (assistant path only; not for dictation requests coming from apps). */
     fun forAssist(withSearch: Boolean) {
         val urls = LinkedHashSet<String>()
         origin(Config.baseUrl)?.let { urls.add(it) }
@@ -39,7 +39,7 @@ object Prewarm {
         }
     }
 
-    /** Yalnız https sunucuların kökü (yerel/http adreslerde TLS maliyeti yok, ısıtma gereksiz). */
+    /** The root of https servers only (local/http addresses have no TLS cost, warming them up is pointless). */
     private fun origin(baseUrl: String): String? = try {
         val u = URL(baseUrl.trim())
         if (u.protocol == "https") "https://" + u.host + (if (u.port > 0) ":" + u.port else "") + "/" else null
@@ -64,9 +64,9 @@ object Prewarm {
             c.connectTimeout = 7000
             c.readTimeout = 7000
             val code = c.responseCode
-            // Akışı kapatmak bağlantıyı havuza geri verir (disconnect() çağırma: soketi kapatır).
+            // Closing the stream returns the connection to the pool (do not call disconnect(): it closes the socket).
             (if (code >= 400) c.errorStream else c.inputStream)?.close()
-            Log.i(TAG, "prewarm $host: dns=$dns ms (v4=${addrs.size - v6}, v6=$v6), toplam=${SystemClock.elapsedRealtime() - t0} ms, HTTP $code")
+            Log.i(TAG, "prewarm $host: dns=$dns ms (v4=${addrs.size - v6}, v6=$v6), total=${SystemClock.elapsedRealtime() - t0} ms, HTTP $code")
         } catch (e: Exception) {
             Log.i(TAG, "prewarm $host: ${e.javaClass.simpleName} (${SystemClock.elapsedRealtime() - t0} ms)")
         }

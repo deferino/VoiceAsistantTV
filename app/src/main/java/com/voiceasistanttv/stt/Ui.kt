@@ -12,7 +12,7 @@ import android.widget.ScrollView
 
 fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density + 0.5f).toInt()
 
-/** Kumandayla odaklanınca belirginleşen düğme/satır arka planı. */
+/** Button/row background that becomes prominent when focused with the remote. */
 fun Context.focusDrawable(): StateListDrawable {
     val focused = GradientDrawable()
     focused.setColor(0xFF1F6F5C.toInt())
@@ -27,7 +27,7 @@ fun Context.focusDrawable(): StateListDrawable {
     return s
 }
 
-/** Dinleme ekranındaki mikrofon göstergesi: ses seviyesine göre nabız atar. */
+/** The microphone indicator on the listening screen: it pulses with the sound level. */
 class MicView(context: Context) : View(context) {
     enum class Mode { IDLE, LISTENING, PROCESSING, OK, ERROR }
 
@@ -67,7 +67,7 @@ class MicView(context: Context) : View(context) {
         paint.alpha = 255
         canvas.drawCircle(cx, cy, base, paint)
 
-        // Mikrofon çizimi
+        // Microphone drawing
         paint.color = 0xFFFFFFFF.toInt()
         val bw = base * 0.55f
         val bh = base * 0.95f
@@ -93,7 +93,7 @@ class MicView(context: Context) : View(context) {
     }
 }
 
-/** İçeriği büyükse kayan, ama belirtilen yüksekliği aşmayan kaydırma alanı. */
+/** A scroll area that scrolls if its content is large but never exceeds the given height. */
 class MaxHeightScrollView(context: Context, private val maxHeightPx: Int) : ScrollView(context) {
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(maxHeightPx, View.MeasureSpec.AT_MOST))

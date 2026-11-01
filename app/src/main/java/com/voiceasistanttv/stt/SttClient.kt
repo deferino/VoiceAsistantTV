@@ -7,9 +7,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * OpenAI uyumlu `POST {baseUrl}/audio/transcriptions` istemcisi.
- * Groq, OpenAI ve OpenAI uyumlu kendi sunucuların (faster-whisper-server, whisper.cpp server vb.) ile çalışır.
- * Sadece Android framework sınıflarını kullanır (OkHttp vb. yok).
+ * Client for the OpenAI-compatible `POST {baseUrl}/audio/transcriptions`.
+ * Works with Groq, OpenAI and your own OpenAI-compatible servers (faster-whisper-server, whisper.cpp server, etc.).
+ * Uses only Android framework classes (no OkHttp etc.).
  */
 object SttClient {
     sealed class Result {
@@ -17,7 +17,7 @@ object SttClient {
         class Err(val message: String, val network: Boolean) : Result()
     }
 
-    /** İptal edilebilir çağrı tutacağı. */
+    /** Handle of a cancellable call. */
     class Call {
         @Volatile
         var conn: HttpURLConnection? = null
@@ -101,7 +101,7 @@ object SttClient {
         }
     }
 
-    /** Ayarları denemek için 1 sn sessizlik gönderir; 200 dönerse anahtar/adres/model doğrudur. */
+    /** Sends 1 s of silence to try the settings; if it returns 200, the key/address/model are correct. */
     fun ping(baseUrl: String, apiKey: String, model: String, language: String): Result =
         transcribe(Wav.silence(1, 16000), baseUrl, apiKey, model, language, "")
 

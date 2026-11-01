@@ -13,9 +13,9 @@ import android.util.Log
 import java.util.Locale
 
 /**
- * Sistem konuşma tanıyıcısı (SpeechRecognizer API'si). Arama kutularındaki mikrofon düğmeleri
- * gibi RecognizerIntent/SpeechRecognizer kullanan uygulamalar bunu çağırır.
- * Sayboard'daki SayboardRecognitionService'in bulut STT'ye uyarlanmış hâlidir.
+ * The system speech recognizer (SpeechRecognizer API). Apps that use RecognizerIntent/SpeechRecognizer,
+ * such as the microphone buttons in search boxes, call this.
+ * It is Sayboard's SayboardRecognitionService adapted to cloud STT.
  */
 class CloudRecognitionService : RecognitionService() {
     private var transcriber: Transcriber? = null
@@ -37,11 +37,11 @@ class CloudRecognitionService : RecognitionService() {
             ?.let { Locale.forLanguageTag(it).language }
             ?.takeIf { it.isNotBlank() }
 
-        // Klavye yolu: TV'nin yerlesik (uzak alan) mikrofonu cok daha sessiz gelir ve sabit 500 esigi
-        // konusmanin cogunu kesiyordu. Esik gurultuye gore (3x), taban 40; klip payi daha genis.
-        // Asistan tusu yolu (AssistActivity) bu ayarlari KULLANMAZ, degismedi.
+        // Keyboard path: the TV's built-in (far-field) microphone is much quieter and a fixed threshold of 500
+        // was cutting off most of the speech. The threshold follows the noise (3x), floor 40; the clip padding is wider.
+        // The assistant-key path (AssistActivity) does NOT use these settings and is unchanged.
         val t = Transcriber(
-            this, attribution, requested, tag = "klavye",
+            this, attribution, requested, tag = "keyboard",
             vadFloor = minOf(Config.vadThreshold, KEYBOARD_VAD_FLOOR),
             farField = true, sourceOverride = Config.kbAudioSource
         )
@@ -50,7 +50,7 @@ class CloudRecognitionService : RecognitionService() {
             override fun onReady() = safe { listener.readyForSpeech(Bundle()) }
             override fun onSpeechStart() = safe { listener.beginningOfSpeech() }
             override fun onLevel(rms: Int, speaking: Boolean) {
-                // 0..10 aralığına yaklaşık dB eşlemesi
+                // Approximate mapping to a 0..10 dB range
                 val v = (Math.log(rms.toDouble() + 1.0) / Math.log(32768.0) * 10.0).toFloat()
                 safe { listener.rmsChanged(v) }
             }
@@ -107,7 +107,7 @@ class CloudRecognitionService : RecognitionService() {
         try {
             block()
         } catch (e: RemoteException) {
-            Log.e(TAG, "Çağıran uygulamaya ulaşılamadı", e)
+            Log.e(TAG, "Could not reach the calling app", e)
         }
     }
 

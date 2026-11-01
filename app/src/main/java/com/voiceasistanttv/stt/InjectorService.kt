@@ -10,9 +10,9 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
 /**
- * Çevrilen metni odaktaki düzenlenebilir alana yazar (ACTION_SET_TEXT).
- * Hiçbir olay dinlemez/okumaz; sadece bir konuşma bittiğinde odaktaki alanı bulur.
- * Açık değilse uygulama metni panoya kopyalar.
+ * Writes the transcribed text into the focused editable field (ACTION_SET_TEXT).
+ * It listens to / reads no events; it only finds the focused field when an utterance has ended.
+ * If it is not enabled, the app copies the text to the clipboard.
  */
 class InjectorService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
@@ -38,9 +38,9 @@ class InjectorService : AccessibilityService() {
     }
 
     /**
-     * Ekranda bir klavye (giris yontemi) penceresi var mi? Yalnizca pencere TURUNE bakar, icerik
-     * okumaz. Servis hazir degilse veya sorgu basarisizsa null. Asistan tusuna basildiginda
-     * "klavye acik mi" kararini ANINDA (es zamanli) verebilmek icin kullanilir.
+     * Is there a keyboard (input method) window on screen? Looks only at the window TYPE, reads no
+     * content. null if the service is not ready or the query failed. Used to decide IMMEDIATELY (synchronously)
+     * "is a keyboard open" when the assistant key is pressed.
      */
     fun isKeyboardWindowShown(): Boolean? = try {
         windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
@@ -48,7 +48,7 @@ class InjectorService : AccessibilityService() {
         null
     }
 
-    /** Dinleme ekranı kapanırken çağrılır; alt uygulamanın odağı geri alması için kısa bekler. */
+    /** Called when the listening screen closes; waits briefly so that the app underneath can take focus back. */
     fun insertLater(text: String) = attempt(text, 0)
 
     private fun attempt(text: String, n: Int) {
@@ -99,7 +99,7 @@ class InjectorService : AccessibilityService() {
         rootInActiveWindow?.let { roots.add(it) }
 
         for (root in roots) {
-            if (root.packageName?.toString() == packageName) continue // kendi dinleme ekranımızı atla
+            if (root.packageName?.toString() == packageName) continue // skip our own listening screen
             val focused = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
             if (focused != null && focused.isEditable) return focused
             firstFocusedEditable(root)?.let { return it }
@@ -107,7 +107,7 @@ class InjectorService : AccessibilityService() {
         return null
     }
 
-    /** Ağacı sınırlı sayıda düğümle gezip odaklı, düzenlenebilir ilk düğümü bulur. */
+    /** Walks the tree with a bounded number of nodes and finds the first focused, editable node. */
     private fun firstFocusedEditable(root: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         val stack = ArrayDeque<AccessibilityNodeInfo>()
         stack.addLast(root)

@@ -8,9 +8,9 @@ import android.os.Looper
 import android.widget.Toast
 
 /**
- * Çevrilen metni odaktaki alana ulaştırır:
- *  1) Erişilebilirlik servisi açıksa odaktaki metin alanına yazar,
- *  2) değilse panoya kopyalar ve kısa bir bildirim gösterir.
+ * Delivers the transcribed text to the focused field:
+ *  1) writes into the focused text field if the accessibility service is on,
+ *  2) otherwise copies it to the clipboard and shows a short notification.
  */
 object TextDelivery {
     fun deliver(ctx: Context, text: String) {

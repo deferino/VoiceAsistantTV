@@ -7,10 +7,10 @@ import org.json.JSONObject
 import java.io.File
 
 /**
- * Tüm ayarlar burada tutulur (SharedPreferences).
+ * All settings are kept here (SharedPreferences).
  *
- * İlk açılışta, adb ile bırakılan `filesDir/config.json` dosyası varsa içe aktarılır ve silinir.
- * Böylece TV'de uzun API anahtarını kumandayla yazmak gerekmez (bkz. kurulum.bat).
+ * On first launch, a `filesDir/config.json` left behind by adb is imported and then deleted.
+ * That way the long API key does not have to be typed with the remote (see install.bat).
  */
 object Config {
     private const val TAG = "VoiceTV"
@@ -90,17 +90,17 @@ object Config {
         get() = str("model", presets[0].models[0])
         set(v) = prefs.edit().putString("model", v).apply()
 
-    /** ISO-639-1 kodu ("tr"); boş = otomatik algıla. */
+    /** ISO-639-1 code ("tr"); empty = auto-detect. */
     var language: String
         get() = str("language", Lang.code())
         set(v) = prefs.edit().putString("language", v).apply()
 
-    /** İsteğe bağlı bağlam/ipucu metni (Whisper `prompt` alanı). */
+    /** Optional context/hint text (Whisper `prompt` field). */
     var prompt: String
         get() = str("prompt", "")
         set(v) = prefs.edit().putString("prompt", v).apply()
 
-    /** Konuşma bittikten kaç ms sessizlik sonra kayıt kapanır. */
+    /** How many ms of silence after speech ends before recording stops. */
     var silenceMs: Int
         get() = int("silenceMs", 1200)
         set(v) = prefs.edit().putInt("silenceMs", v).apply()
@@ -109,12 +109,12 @@ object Config {
         get() = int("maxSeconds", 15)
         set(v) = prefs.edit().putInt("maxSeconds", v).apply()
 
-    /** Hiç konuşma algılanmazsa kaç saniye sonra vazgeçilir. */
+    /** How many seconds without any detected speech before giving up. */
     var noSpeechSeconds: Int
         get() = int("noSpeechSeconds", 6)
         set(v) = prefs.edit().putInt("noSpeechSeconds", v).apply()
 
-    /** Konuşma algılama için minimum RMS eşiği (16-bit örnekler). Düşük = daha hassas. */
+    /** Minimum RMS threshold for speech detection (16-bit samples). Lower = more sensitive. */
     var vadThreshold: Int
         get() = int("vadThreshold", 500)
         set(v) = prefs.edit().putInt("vadThreshold", v).apply()
@@ -123,52 +123,52 @@ object Config {
         get() = str("audioSource", SOURCE_VOICE_RECOGNITION)
         set(v) = prefs.edit().putString("audioSource", v).apply()
 
-    /** Klavye (SpeechRecognizer) yolunda denenecek ses kaynağı; boş = audioSource kullanılır. Asistan tuşu yolu bunu kullanmaz. */
+    /** Audio source to try on the keyboard (SpeechRecognizer) path; empty = use audioSource. The assistant-key path does not use this. */
     var kbAudioSource: String
         get() = str("kbAudioSource", "")
         set(v) = prefs.edit().putString("kbAudioSource", v).apply()
 
-    /** 0 = sistem varsayılanı; aksi halde AudioDeviceInfo.id. */
+    /** 0 = system default; otherwise an AudioDeviceInfo.id. */
     var inputDeviceId: Int
         get() = int("inputDeviceId", 0)
         set(v) = prefs.edit().putInt("inputDeviceId", v).apply()
 
-    /** Konuşma bitince ne yapılsın: both | smarttube | nuvio | write. */
+    /** What to do when speech ends: both | smarttube | nuvio | write. */
     var searchTarget: String
         get() = str("searchTarget", TARGET_BOTH).let { if (it == "ask") TARGET_BOTH else it }
         set(v) = prefs.edit().putString("searchTarget", v).apply()
 
-    /** "Her seferinde sor" ekranında önce odaklanacak seçenek (son kullanılan). */
+    /** On the "ask every time" screen, the option focused first (the last one used). */
     var lastTarget: String
         get() = str("lastTarget", TARGET_SMARTTUBE)
         set(v) = prefs.edit().putString("lastTarget", v).apply()
 
-    /** İsteğe bağlı TMDB anahtarı (v3 anahtarı ya da v4 okuma jetonu): Türkçe film adlarını da bulur. */
+    /** Optional TMDB key (v3 key or v4 read token): also finds localized (e.g. Turkish) movie titles. */
     var tmdbKey: String
         get() = str("tmdbKey", "")
         set(v) = prefs.edit().putString("tmdbKey", v).apply()
 
-    /** İsteğe bağlı YouTube Data API v3 anahtarı (yoksa anahtarsız web arama uç noktası denenir). */
+    /** Optional YouTube Data API v3 key (without it, the keyless web search endpoint is tried). */
     var youtubeKey: String
         get() = str("youtubeKey", "")
         set(v) = prefs.edit().putString("youtubeKey", v).apply()
 
-    /** Konuşmada şehir söylenmezse ("hava durumu") hava durumu bu şehir için gösterilir. */
+    /** City shown in the weather panel when none is spoken ("weather"). */
     var weatherCity: String
         get() = str("weatherCity", "").ifBlank { Lang.s(R.string.default_city) }
         set(v) = prefs.edit().putString("weatherCity", v).apply()
 
-    /** Kullanılacak SmartTube paket adı; boş = kurulu olanı kendisi bulur (otomatik). */
+    /** SmartTube package name to use; empty = auto-detect the installed one. */
     var smartTubePkg: String
         get() = str("smartTubePkg", "").trim()
         set(v) = prefs.edit().putString("smartTubePkg", v.trim()).apply()
 
-    /** Kullanılacak Nuvio paket adı; boş = kurulu olanı kendisi bulur (otomatik). */
+    /** Nuvio package name to use; empty = auto-detect the installed one. */
     var nuvioPkg: String
         get() = str("nuvioPkg", "").trim()
         set(v) = prefs.edit().putString("nuvioPkg", v.trim()).apply()
 
-    /** Arayüz dili: auto | tr | en (bkz. Lang). */
+    /** UI language: auto | tr | en (see Lang). */
     var uiLanguage: String
         get() = str("uiLanguage", Lang.AUTO)
         set(v) = prefs.edit().putString("uiLanguage", v).apply()
@@ -177,14 +177,14 @@ object Config {
         get() = str("insertMode", INSERT_APPEND)
         set(v) = prefs.edit().putString("insertMode", v).apply()
 
-    /** Yazdıktan sonra otomatik "Enter/Ara" gönder (Android 11+ erişilebilirlik ile). */
+    /** After typing, automatically send "Enter/Search" (via accessibility, Android 11+). */
     var autoSubmit: Boolean
         get() = bool("autoSubmit", false)
         set(v) = prefs.edit().putBoolean("autoSubmit", v).apply()
 
     /**
-     * `adb shell am broadcast -n …/.ConfigReceiver -a com.voiceasistanttv.stt.CONFIG --es apiKey … ` ile gelen ayarları
-     * uygular (yalnız bilinen anahtarlar). Kaç ayar uygulandığını döndürür.
+     * Applies settings received via `adb shell am broadcast -n …/.ConfigReceiver -a com.voiceasistanttv.stt.CONFIG --es apiKey … `
+     * (known keys only). Returns how many settings were applied.
      */
     @Synchronized
     fun applyExtras(extras: android.os.Bundle?): Int {
@@ -198,7 +198,7 @@ object Config {
         return n
     }
 
-    /** adb ile bırakılan config.json varsa içe aktarır ve siler (açılışta ve ekran açılırken çağrılır). */
+    /** Imports and deletes a config.json left behind by adb, if present (called at startup and when the screen opens). */
     @Synchronized
     fun importFile(ctx: Context) {
         if (!ready) return
@@ -211,9 +211,9 @@ object Config {
             for (k in intKeys) if (o.has(k)) e.putInt(k, o.getInt(k))
             for (k in boolKeys) if (o.has(k)) e.putBoolean(k, o.getBoolean(k))
             e.apply()
-            Log.i(TAG, "config.json içe aktarıldı")
+            Log.i(TAG, "config.json imported")
         } catch (ex: Exception) {
-            Log.e(TAG, "config.json okunamadı: ${ex.message}")
+            Log.e(TAG, "config.json could not be read: ${ex.message}")
         } finally {
             f.delete()
         }

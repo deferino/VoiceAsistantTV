@@ -8,18 +8,18 @@ import android.net.Uri
 import android.util.Log
 
 /**
- * SmartTube ve Nuvio'yu bulur ve arama / başlık bağlantısıyla açar.
+ * Finds SmartTube and Nuvio and opens them with a search / title link.
  *
- *  - SmartTube: `https://www.youtube.com/results?search_query=…` bağlantısı doğrudan arama ekranını açar
- *    (SmartTube kaynak kodunda IntentExtractor.extractSearchText).
- *  - Nuvio: arama bağlantısı yok; yalnızca başlık sayfası bağlantıları var
- *    (`nuvio://meta?type=movie|series&id=tt…`, `nuvio://tmdb/movie/<id>`). Bu yüzden başlığı
- *    önce MediaSearch ile buluyoruz.
+ *  - SmartTube: the `https://www.youtube.com/results?search_query=…` link opens the search screen directly
+ *    (see IntentExtractor.extractSearchText in the SmartTube source).
+ *  - Nuvio: there is no search link; only title-page links exist
+ *    (`nuvio://meta?type=movie|series&id=tt…`, `nuvio://tmdb/movie/<id>`). That is why we find the title
+ *    with MediaSearch first.
  */
 object AppLauncher {
     private const val TAG = "VoiceTV"
 
-    /** Ayarlarda hazır seçenek olarak gösterilen uygulama (ad + paket adı). */
+    /** App shown as a ready-made option in the settings (name + package name). */
     class AppChoice(private val labelOf: () -> String, val pkg: String) {
         val label: String get() = labelOf()
     }
@@ -35,7 +35,7 @@ object AppLauncher {
         AppChoice({ "Nuvio Reshaped" }, "com.nuvioreshaped.tv")
     )
 
-    // "Otomatik" modda sırayla denenir (ilk kurulu olan seçilir).
+    // In "Automatic" mode they are tried in order (the first installed one is chosen).
     private val SMARTTUBE_PACKAGES = listOf(
         "org.smarttube.beta", "org.smarttube.stable", "app.smarttube", "app.smarttube.fdroid",
         "com.teamsmart.videomanager.tv", "com.liskovsoft.smarttubetv.beta", "com.liskovsoft.smarttubetv"
@@ -57,7 +57,7 @@ object AppLauncher {
     fun smartTubeSearchUri(query: String): Uri =
         Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query))
 
-    /** Ayarda paket adı seçildiyse yalnız o kullanılır (kurulu değilse null); boşsa otomatik bulunur. */
+    /** If a package name is chosen in the settings only that one is used (null if not installed); if empty it is auto-detected. */
     fun smartTubePackage(ctx: Context): String? {
         val pm = ctx.packageManager
         val chosen = Config.smartTubePkg
@@ -75,7 +75,7 @@ object AppLauncher {
         }
     }
 
-    /** Ayarda paket adı seçildiyse yalnız o kullanılır (kurulu değilse null); boşsa otomatik bulunur. */
+    /** If a package name is chosen in the settings only that one is used (null if not installed); if empty it is auto-detected. */
     fun nuvioPackage(ctx: Context): String? {
         val pm = ctx.packageManager
         val chosen = Config.nuvioPkg
@@ -92,13 +92,13 @@ object AppLauncher {
     private fun start(ctx: Context, uri: Uri, pkg: String): Boolean = try {
         val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         ctx.startActivity(i)
-        Log.i(TAG, "açıldı: $uri ($pkg)")
+        Log.i(TAG, "opened: $uri ($pkg)")
         true
     } catch (e: ActivityNotFoundException) {
-        Log.w(TAG, "açılamadı: $uri ($pkg): ${e.message}")
+        Log.w(TAG, "could not open: $uri ($pkg): ${e.message}")
         false
     } catch (e: Exception) {
-        Log.w(TAG, "açılamadı: $uri ($pkg): $e")
+        Log.w(TAG, "could not open: $uri ($pkg): $e")
         false
     }
 
@@ -112,7 +112,7 @@ object AppLauncher {
         return start(ctx, Uri.parse("https://www.youtube.com/watch?v=" + Uri.encode(videoId)), pkg)
     }
 
-    /** Bu paket verilen bağlantıyı (VIEW) açabiliyor mu? */
+    /** Can this package open the given link (VIEW)? */
     private fun canOpen(ctx: Context, uri: Uri, pkg: String): Boolean = try {
         val i = Intent(Intent.ACTION_VIEW, uri).setPackage(pkg)
         ctx.packageManager.queryIntentActivities(i, 0).isNotEmpty()
@@ -121,8 +121,8 @@ object AppLauncher {
     }
 
     /**
-     * Başlık sayfasını açar. Önce Nuvio'nun kendi bağlantısı (`nuvio://meta`) denenir; seçili sürüm bunu
-     * tanımıyorsa (ör. Nuvio Native Legacy yalnız IMDb / stremio bağlantılarını tanır) IMDb başlık bağlantısına düşülür.
+     * Opens the title page. Nuvio's own link (`nuvio://meta`) is tried first; if the selected build does not
+     * recognize it (e.g. Nuvio Native Legacy only recognizes IMDb / stremio links), it falls back to the IMDb title link.
      */
     fun openNuvioMeta(ctx: Context, type: String, imdbId: String): Boolean {
         val pkg = nuvioPackage(ctx) ?: return false
@@ -138,7 +138,7 @@ object AppLauncher {
         return start(ctx, Uri.parse("nuvio://tmdb/$type/$tmdbId"), pkg)
     }
 
-    /** Nuvio'yu ana ekranından açar (ayar ekranındaki deneme için). */
+    /** Opens Nuvio from its home screen (for the test in the settings screen). */
     fun launchNuvio(ctx: Context): Boolean {
         val pkg = nuvioPackage(ctx) ?: return false
         val pm = ctx.packageManager

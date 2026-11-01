@@ -23,11 +23,11 @@ import android.widget.TextView
 import java.util.Locale
 
 /**
- * Dinleme ekranı. Üç şekilde açılır:
- *  - Asistan tuşu / ASSIST isteği: dinler, metni odaktaki alana yazar (veya panoya kopyalar),
- *  - RecognizerIntent.ACTION_RECOGNIZE_SPEECH: sonucu çağıran uygulamaya döndürür,
- *  - Ayarlardaki test: sonucu sadece gösterir.
- * Kumanda: OK = konuşmayı bitir ve çevir, Geri = iptal.
+ * Listening screen. It is opened in three ways:
+ *  - Assistant key / ASSIST request: listens, then writes the text into the focused field (or copies it to the clipboard),
+ *  - RecognizerIntent.ACTION_RECOGNIZE_SPEECH: returns the result to the calling app,
+ *  - Test from the settings screen: only shows the result.
+ * Remote: OK = stop speaking and transcribe, Back = cancel.
  */
 class AssistActivity : Activity(), Transcriber.Listener {
     private lateinit var mic: MicView
@@ -50,16 +50,16 @@ class AssistActivity : Activity(), Transcriber.Listener {
         super.onCreate(savedInstanceState)
         Config.init(this)
         Config.importFile(this)
-        Log.i("VoiceTV", "AssistActivity açıldı: ${intent?.action}")
+        Log.i("VoiceTV", "AssistActivity opened: ${intent?.action}")
         returnMode = intent?.action == RecognizerIntent.ACTION_RECOGNIZE_SPEECH
         testMode = intent?.getBooleanExtra(EXTRA_TEST, false) == true
         setContentView(buildUi())
-        // Yalnızca debug sürümde: mikrofonsuz test (adb: am start -n .../.AssistActivity --es debug_text "arama")
+        // Debug builds only: test without a microphone (adb: am start -n .../.AssistActivity --es debug_text "search")
         val debugText = if (isDebuggable()) intent?.getStringExtra(EXTRA_DEBUG_TEXT) else null
-        // Konuşma süresince sonraki isteklerin bağlantılarını hazırla (asistan yolunda arama sunucuları da).
+        // While the user speaks, warm up connections for the next requests (on the assistant path, the search servers too).
         Prewarm.forAssist(withSearch = !returnMode && !testMode)
         if (!debugText.isNullOrBlank()) {
-            // debug_delay (ms): konuşma süresini taklit eder (bağlantı ısıtmayı ölçmek için)
+            // debug_delay (ms): simulates the speaking time (used to measure the connection warm-up)
             val delay = intent?.getIntExtra("debug_delay", 0)?.toLong() ?: 0L
             handler.postDelayed({ onResult(debugText) }, delay)
             return
@@ -71,7 +71,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        // Tuşa tekrar basıldı: konuşmayı bitir
+        // The key was pressed again: stop speaking
         if (done) finishAssist() else transcriber?.stopNow()
     }
 
@@ -205,11 +205,11 @@ class AssistActivity : Activity(), Transcriber.Listener {
         if (!testMode) handler.postDelayed({ finishAssist() }, 3500L)
     }
 
-    // ---- Sonucu yönlendirme: SmartTube / Nuvio / odaktaki alana yaz ----
+    // ---- Routing the result: SmartTube / Nuvio / write into the focused field ----
 
     private fun routeResult(text: String) {
-        // Hava durumu sorusu ("İstanbul hava durumu", "yarın Ankara'da hava nasıl") → sadece hava paneli.
-        // "Sadece alana yaz" modunda dokunulmaz; hava sorusu değilse normal arama sürer.
+        // Weather question ("weather in Istanbul", "how is the weather tomorrow in Ankara") -> weather panel only.
+        // Left alone in "write to field only" mode; if it is not a weather question, the normal search continues.
         if (Config.searchTarget != Config.TARGET_WRITE) {
             val wq = WeatherQuery.parse(text)
             if (wq != null) {
@@ -235,7 +235,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
         handler.postDelayed({ finishAssist() }, 700L)
     }
 
-    /** Durum kartı: küçük, altta ortada. */
+    /** Status card: small, bottom center. */
     private fun showStatusAgain() {
         choosing = false
         choices.visibility = View.GONE
@@ -252,7 +252,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
         card.layoutParams = cardLp
     }
 
-    /** Sonuç paneli: ekranın altında, geniş (Google Asistan sonuçları gibi). */
+    /** Results panel: wide, at the bottom of the screen (like Google Assistant results). */
     private fun showPanel() {
         mic.visibility = View.GONE
         sub.visibility = View.VISIBLE
@@ -267,7 +267,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
         card.layoutParams = cardLp
     }
 
-    /** Ekran yüksekliğine göre kart ölçeği (küçük/yoğun ekranlarda kartlar küçülür). */
+    /** Card scale based on screen height (cards shrink on small/dense screens). */
     private fun cardScale(): Float {
         val dm = resources.displayMetrics
         return ((dm.heightPixels / dm.density) / 720f).coerceIn(0.72f, 1.15f)
@@ -319,7 +319,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
     private fun addCard(sec: Section, v: View) {
         val lp = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         lp.setMargins(dp(4), dp(3), dp(4), dp(3))
-        // Odak bu satıra geçince satır başlığı da görünsün (dikey kaydırma başlığı kırpmasın)
+        // When focus moves to this row, show the row header too (vertical scrolling must not clip the header)
         v.setOnFocusChangeListener { _, has ->
             if (has) {
                 val s = resultsScroll
@@ -412,11 +412,11 @@ class AssistActivity : Activity(), Transcriber.Listener {
                 runOnUiThread { if (!isFinishing && !isDestroyed) fillNuvio(out) }
             }.start()
         }
-        // bir liste çok gecikirse yine de bir yere odaklan
+        // If one list is very slow, still focus somewhere
         handler.postDelayed({ if (!autoFocused) focusPreferred() }, 4000L)
     }
 
-    // ---- Hava durumu paneli (yalnızca hava sorusu sorulduğunda) ----
+    // ---- Weather panel (only when a weather question was asked) ----
 
     private fun footerLp() =
         LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -442,7 +442,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
         val rep = out.report
         if (rep == null) {
             if (out.notFound && q.city != null) {
-                // Yer adı değilmiş (ya da yanlış anlaşıldı): normal arama gibi davran
+                // Not a place name (or misheard): behave like a normal search
                 routeSearch(text)
                 return
             }
@@ -455,7 +455,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
 
         showPanel()
         sub.visibility = View.GONE
-        // Hava paneli daha yüksek: kenar boşluklarını biraz kıs, ekrana tam sığsın
+        // The weather panel is taller: trim the margins a little so it fits the screen
         card.setPadding(dp(32), dp(10), dp(32), dp(12))
         cardLp.bottomMargin = dp(18)
         card.layoutParams = cardLp
@@ -492,7 +492,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
         footer.gravity = Gravity.CENTER
         footer.addView(button(Lang.s(R.string.btn_close)) { finishAssist() }, footerLp())
         footer.addView(button(Lang.s(R.string.btn_search_yt_nuvio)) { routeSearch(text) }, footerLp())
-        // Open-Meteo kullanım koşulu: kaynak belirtilmeli
+        // Open-Meteo terms of use: the source must be credited
         footer.addView(
             TextView(this).apply {
                 this.text = Lang.s(R.string.weather_credit)
@@ -557,7 +557,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
         return null
     }
 
-    /** Önce son kullanılan listenin ilk sonucuna, o boşsa diğerine, o da boşsa alt düğmelere odaklan. */
+    /** Focus the first result of the last used list, else the other list, else the bottom buttons. */
     private fun focusPreferred() {
         autoFocused = true
         val order = if (Config.lastTarget == Config.TARGET_NUVIO) listOf(nuvSection, ytSection) else listOf(ytSection, nuvSection)
@@ -614,7 +614,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
         }.start()
     }
 
-    // ---- Kumanda ----
+    // ---- Remote control ----
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (choosing) {
@@ -664,7 +664,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
 
     override fun onStop() {
         super.onStop()
-        // Kullanıcı başka yere geçtiyse dinlemeyi bırak (izin penceresi açıkken hariç)
+        // If the user moved elsewhere, stop listening (except while the permission dialog is open)
         if (!isFinishing && !waitingPermission) {
             transcriber?.cancel()
             finishAssist()

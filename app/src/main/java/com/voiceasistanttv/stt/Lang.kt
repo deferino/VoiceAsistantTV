@@ -5,9 +5,9 @@ import android.content.res.Configuration
 import java.util.Locale
 
 /**
- * Arayüz dili / UI language. Ayar `uiLanguage`: "auto" (sistem dili; Türkçe değilse İngilizce), "tr" ya da "en".
- * Metinler `res/values` (İngilizce, varsayılan) ve `res/values-tr` (Türkçe) içindedir; [s] seçili dile göre okur.
- * Context gerektirmez (uygulama bağlamı [init] ile bir kez verilir), bu yüzden ağ/servis kodundan da kullanılabilir.
+ * UI language. The `uiLanguage` setting: "auto" (system language; English if it is not Turkish), "tr" or "en".
+ * Strings live in `res/values` (English, the default) and `res/values-tr` (Turkish); [s] reads them for the selected language.
+ * Needs no Context (the application context is given once via [init]), so it can also be used from network/service code.
  */
 object Lang {
     const val AUTO = "auto"
@@ -20,13 +20,13 @@ object Lang {
         app = ctx.applicationContext
     }
 
-    /** Ayarda seçili değer: "auto", "tr" ya da "en". */
+    /** Selected value in the settings: "auto", "tr" or "en". */
     fun pref(): String {
         val a = app ?: return AUTO
         return a.getSharedPreferences("stt_config", Context.MODE_PRIVATE).getString("uiLanguage", AUTO) ?: AUTO
     }
 
-    /** Etkin dil kodu: "tr" ya da "en". */
+    /** Effective language code: "tr" or "en". */
     fun code(): String = when (pref()) {
         "tr" -> "tr"
         "en" -> "en"
@@ -37,7 +37,7 @@ object Lang {
 
     @Synchronized
     private fun res(): Context {
-        val a = app ?: throw IllegalStateException("Lang.init çağrılmadı")
+        val a = app ?: throw IllegalStateException("Lang.init was not called")
         return cache.getOrPut(code()) {
             val cfg = Configuration(a.resources.configuration)
             cfg.setLocale(locale())
@@ -49,16 +49,16 @@ object Lang {
 
     fun s(id: Int, vararg args: Any): String = res().getString(id, *args)
 
-    /** TMDB `language=` değeri. */
+    /** The TMDB `language=` value. */
     fun tmdbLang(): String = if (code() == "tr") "tr-TR" else "en-US"
 
-    /** YouTube `gl` / `regionCode`: Türkçe arayüzde TR, aksi halde cihazın bölgesi (yoksa US). */
+    /** YouTube `gl` / `regionCode`: TR in the Turkish UI, otherwise the device region (US if none). */
     fun region(): String = if (code() == "tr") "TR" else Locale.getDefault().country.ifBlank { "US" }
 
-    /** "%40" (Türkçe) / "40%" (İngilizce). */
+    /** "%40" (Turkish) / "40%" (English). */
     fun pct(n: Int): String = if (code() == "tr") "%$n" else "$n%"
 
-    /** ABD yerel ayarında İngilizce arayüz: °F ve mph. */
+    /** English UI with a US locale: °F and mph. */
     fun imperial(): Boolean = code() == "en" && Locale.getDefault().country == "US"
 
     fun unitsQuery(): String = if (imperial()) "&temperature_unit=fahrenheit&wind_speed_unit=mph" else ""

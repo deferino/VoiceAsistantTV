@@ -1,15 +1,15 @@
 @echo off
-rem APK'yi TV'ye kurar ve asistan tusunu / servisleri bu uygulamaya baglar.
-rem Once scripts\tv.txt dosyasina TV'nin adres:port degerini yaz (ornek: 192.168.1.50:5555).
-rem Istege bagli: proje kokune config.json koy (API anahtari); TV'ye otomatik aktarilir.
-rem Kullanim: scripts\install.bat   |   scripts\install.bat auto
+rem Installs the APK on the TV and binds the assistant key / services to this app.
+rem First write the TV's address:port into scripts\tv.txt (example: 192.168.1.50:5555).
+rem Optional: put config.json (API key) in the project root; it is transferred to the TV automatically.
+rem Usage: scripts\install.bat   |   scripts\install.bat auto
 setlocal EnableExtensions
 cd /d "%~dp0.."
 if not exist logs mkdir logs
 set "LOG=logs\install.log"
 set "PKG=com.voiceasistanttv.stt"
 set "APK=app\build\outputs\apk\debug\app-debug.apk"
-> "%LOG%" echo [%date% %time%] kurulum basliyor
+> "%LOG%" echo [%date% %time%] install starting
 
 if not exist "%APK%" goto noapk
 if not exist scripts\tv.txt goto notv
@@ -31,7 +31,7 @@ if errorlevel 1 goto notconnected
 if errorlevel 1 goto installfail
 
 if not exist config.json goto nocfg
->> "%LOG%" echo == config.json aktariliyor
+>> "%LOG%" echo == transferring config.json
 "%ADB%" -s %TV% push config.json /data/local/tmp/vt-config.json >> "%LOG%" 2>&1
 "%ADB%" -s %TV% shell chmod 644 /data/local/tmp/vt-config.json >> "%LOG%" 2>&1
 "%ADB%" -s %TV% shell run-as %PKG% mkdir -p files >> "%LOG%" 2>&1
@@ -43,35 +43,35 @@ if not exist config.json goto nocfg
 "%ADB%" -s %TV% push scripts\tv-setup.sh /data/local/tmp/vt-setup.sh >> "%LOG%" 2>&1
 "%ADB%" -s %TV% shell sh /data/local/tmp/vt-setup.sh >> "%LOG%" 2>&1
 
-rem NOT: burada "am force-stop" KULLANMA. Asistan/tanima servisi durdurulursa Android ayarlari Google'a geri alir.
->> "%LOG%" echo == uygulama baslatiliyor
+rem NOTE: do NOT use "am force-stop" here. If the assistant/recognition service is stopped, Android reverts the settings to Google.
+>> "%LOG%" echo == starting the app
 "%ADB%" -s %TV% shell am start -n %PKG%/.MainActivity >> "%LOG%" 2>&1
 > logs\install.status echo 0
-echo KURULUM TAMAM. TV'de ayarlar ekrani acildi. Ayrinti: %LOG%
+echo INSTALL DONE. The settings screen opened on the TV. Details: %LOG%
 goto end
 
 :noapk
 > logs\install.status echo 3
->> "%LOG%" echo APK yok. Once scripts\build.bat calistir.
-echo APK yok. Once scripts\build.bat calistir.
+>> "%LOG%" echo APK not found. Run scripts\build.bat first.
+echo APK not found. Run scripts\build.bat first.
 goto end
 :notv
 > logs\install.status echo 4
->> "%LOG%" echo scripts\tv.txt yok. Icine TV adresini yaz (ornek: 192.168.1.50:5555).
-echo scripts\tv.txt yok. Icine TV adresini yaz (ornek: 192.168.1.50:5555).
+>> "%LOG%" echo scripts\tv.txt not found. Write the TV address into it (example: 192.168.1.50:5555).
+echo scripts\tv.txt not found. Write the TV address into it (example: 192.168.1.50:5555).
 goto end
 :noadb
 > logs\install.status echo 5
->> "%LOG%" echo adb bulunamadi. Android SDK platform-tools kurulu mu?
-echo adb bulunamadi. Android SDK platform-tools kurulu mu?
+>> "%LOG%" echo adb not found. Is the Android SDK platform-tools installed?
+echo adb not found. Is the Android SDK platform-tools installed?
 goto end
 :notconnected
 > logs\install.status echo 6
-echo TV'ye baglanilamadi. TV'de Gelistirici secenekleri - Ag hata ayiklama acik mi? Ayrinti: %LOG%
+echo Could not connect to the TV. Is Network debugging on under Developer options? Details: %LOG%
 goto end
 :installfail
 > logs\install.status echo 7
-echo Kurulum basarisiz. Ayrinti: %LOG%
+echo Install failed. Details: %LOG%
 
 :end
 if /i "%~1"=="auto" exit /b 0

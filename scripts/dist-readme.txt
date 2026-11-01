@@ -4,7 +4,7 @@ VOICE SEARCH (STT) - ANDROID TV SETUP
 Press the assistant / microphone key on your TV remote and this app opens: you speak, and the
 text is typed into the focused field, or searched in SmartTube / Nuvio. Say "weather in London"
 (or "what's the weather tomorrow") and a weather panel appears instead.
-The app speaks Turkish and English (Settings - Interface language / Arayuz dili).
+The app speaks Turkish and English (Settings - Interface language).
 
 PREPARE (one time, on the TV)
 1. Settings - Device Preferences - About - press OK on "Build" 7 times (developer mode turns on).
@@ -15,7 +15,7 @@ PREPARE (one time, on the TV)
 
 INSTALL (on a Windows 10 / 11 computer on the same network as the TV)
 1. Extract everything in this zip into one folder (keep all files together).
-2. Double-click install.bat   (kurulum.bat is the same installer; the language follows Windows).
+2. Double-click install.bat   (the installer's language follows Windows).
 3. Type the TV's IP address. On the first connection the TV may ask "Allow USB debugging?" -
    tick "Always allow" and press OK.
 4. Paste your Groq key (leave it empty to enter it later in the app).
@@ -26,7 +26,7 @@ From a command prompt: install.bat uninstall
 (Restores the assistant settings the TV had before, and removes the app.)
 
 IF SOMETHING GOES WRONG
-- kurulum.log shows what was done.
+- install.log shows what was done.
 - If the key does nothing, restart the TV and run install.bat again.
 - Your speech is sent to the API provider you choose (default: Groq). The microphone is only
   used while the listening screen is open.

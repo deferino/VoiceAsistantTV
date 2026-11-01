@@ -1,103 +1,116 @@
-# Sesli Arama (STT) — Android TV için hafif, bulut tabanlı ses→metin
+# Voice Search (STT) — a lightweight, cloud-based speech-to-text app for Android TV
 
 ![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue) ![Android TV](https://img.shields.io/badge/Android%20TV-6.0%2B-green) ![APK](https://img.shields.io/badge/APK-~190%20KB-lightgrey)
 
-Android TV kumandasındaki **asistan/mikrofon tuşuna basıp konuşursun**; ses bulut STT ile metne çevrilir, metin odaktaki alana yazılır, **SmartTube / Nuvio'da aranır** ya da (hava sorusuysa) **hava paneli** açılır. Küçük ve hafif bir uygulama.
-[Sayboard](https://github.com/ElishaAz/Sayboard) (GPL-3.0) mimarisinden türetildi; Vosk yerine
-**bulut STT API'si** (varsayılan: Groq `whisper-large-v3-turbo`) kullanır. Telefondaki ses modeli yok,
-RAM/işlemci kullanımı çok düşük; sadece konuşurken mikrofonu açar, sonucu API'den alır.
+A small Android TV app that takes over the remote's **assistant / microphone key**: you speak, the audio is transcribed by a
+cloud speech-to-text API (Groq `whisper-large-v3-turbo` by default; any OpenAI-compatible endpoint works), and the text is
+typed into the focused field, searched in **SmartTube** and **Nuvio** (Google-Assistant-style result cards), or — for weather
+questions — shown as a **weather panel**. Derived from the architecture of [Sayboard](https://github.com/ElishaAz/Sayboard) (GPL-3.0);
+there is no on-device speech model, RAM/CPU use is tiny, and the microphone is only open while you speak.
 
-> 🇬🇧 **English:** [README.en.md](README.en.md) — the app, the installer and the weather/search commands now work in **English and Turkish**
-> (Settings → *Arayüz dili / Interface language*; "Automatic" follows the TV's language).
-> It was developed and tested on a **TCL Smart TV Pro (Android 11)** only and is provided **as is**, without warranty (GPL-3.0).
-> It is not affiliated with SmartTube, Nuvio, Groq, OpenAI, TMDB, YouTube or Open-Meteo.
+The app, the installer and the voice commands work in **English and Turkish**
+(Settings → *Interface language / Arayüz dili*; "Automatic" follows the TV's system language).
+
+<p align="center"><img src="docs/img/language.png" width="49%" alt="Interface language picker"></p>
+
+> Developed and tested on a **TCL Smart TV Pro (Android 11)** only. Provided **as is**, without warranty (GPL-3.0).
+> Not affiliated with SmartTube, Nuvio, Groq, OpenAI, TMDB, YouTube or Open-Meteo.
 
 <p align="center">
-  <img src="docs/img/weather.png" width="49%" alt="Hava durumu paneli (“weather in london”)">
-  <img src="docs/img/results.png" width="49%" alt="Arama sonuçları: SmartTube / YouTube satırı ve Nuvio film satırı">
+  <img src="docs/img/weather.png" width="49%" alt="Weather panel (“weather in london”)">
+  <img src="docs/img/results.png" width="49%" alt="Search results: SmartTube / YouTube row and Nuvio movies row">
 </p>
 
-## Ne yapar?
+## What it does
 
-- **Kumandadaki asistan/mikrofon tuşu bu uygulamayı açar** (varsayılan asistan olarak atanır).
-- Tuşa bas → konuş → sessizlik olunca (veya OK'a basınca) metne çevrilir → **odaktaki arama/yazı alanına yazılır**.
-  Alan bulunamazsa metin panoya kopyalanır ve ekranda gösterilir.
-- Başka uygulamalar `SpeechRecognizer` / `RECOGNIZE_SPEECH` ile ses tanıma isterse onlara da hizmet verir.
-- **Aramayı SmartTube ve Nuvio'da birlikte yapar** (ayarlardan değiştirilebilir):
-  - *İkisinde de ara* (varsayılan): konuşma bitince tek ekranda yan yana iki liste çıkar: üstte **SmartTube · YouTube** videoları (küçük resim, süre, kanal, izlenme, tarih), altta **Nuvio · Film/Dizi** sonuçları (afiş, yıl, puan, tür, özet) yatay kart satırları olarak çıkar (Google Asistan sonuçları gibi). Sol/Sağ: kartlarda gez, Yukarı/Aşağı: satır değiştir, OK: aç (video SmartTube'da oynar, film/dizi Nuvio'da açılır). Altta "Tüm sonuçlar için SmartTube'da ara" ve "Odaktaki alana yaz" düğmeleri vardır.
-  - *Hep SmartTube*: doğrudan SmartTube arama sonuçlarını açar. *Hep Nuvio*: yalnızca Nuvio listesini gösterir. *Sadece alana yaz*: eski davranış.
-  - YouTube listesi için anahtarsız web araması denenir; istersen ayarlardan YouTube Data API anahtarı girebilirsin. Nuvio'nun arama bağlantısı olmadığı için film/dizi listesi Cinemeta'dan (anahtarsız) gelir; istersen TMDB anahtarı girersen Türkçe adlarla da bulur.
-- **Hava durumu**: "İstanbul hava durumu", "İstanbul'da bugün hava nasıl", "yarın Ankara'da hava nasıl olacak", "Bursa kaç derece", "Antalya'da yağmur yağacak mı" gibi bir şey söylersen **sadece hava paneli** açılır (şu anki durum, saat saat ve 7 günlük tahmin; Open-Meteo, anahtarsız). "Yarın/öbür gün" dersen o günün özeti gelir. Şehir söylemezsen ("hava durumu") ayarlardaki varsayılan şehir kullanılır (varsayılan: Türkçe arayüzde İstanbul, İngilizcede London; ayarlardan değiştirilir). Hava sorusu olmayan her şey eskisi gibi aranır; söylenen şey bir yer adı çıkmazsa da normal aramaya düşer. "Sadece alana yaz" modunda hava devreye girmez. Panelde *Kapat* ve *YouTube / Nuvio'da ara* düğmeleri vardır.
-- **SmartTube / Nuvio paket adı seçilebilir** (Ayarlar › Arama hedefi › *SmartTube paketi*, *Nuvio paketi*): *Otomatik* (kurulu olanı kendisi bulur, varsayılan), hazır liste ya da *Başka paket adı yaz…*. Hazır liste: SmartTube `org.smarttube.stable`, SmartTube Beta `org.smarttube.beta`; Nuvio `com.nuvio.tv` (orijinal), Nuvio Arc `com.nuvio.tv.test`, Nuvio Native Legacy `space.nuvio.nativelegacy`, Nuvio Reshaped `com.nuvioreshaped.tv`. Listede kurulu olanlar ✓ ile işaretlenir. Bir paket seçersen yalnız o kullanılır (kurulu değilse hata gösterilir). Native Legacy `nuvio://` bağlantısını tanımadığı için başlıklar IMDb bağlantısıyla açılır.
-- **Türkçe ve İngilizce arayüz**: Ayarlar › Genel › *Arayüz dili / Interface language* (Otomatik = TV'nin diline uyar). İngilizce arayüzde hava ve arama de İngilizce çalışır ("weather in London", "will it rain tomorrow", "what's the weather like in Paris tomorrow" …); konuşma dilini (Whisper) ayrıca *Konuşma dili* satırından seçersin. Kurulum betiği de Windows diline göre Türkçe/İngilizce konuşur (`install.bat` = `kurulum.bat`).
-- **Tamamen kumanda ile kullanılır** (yön tuşları, OK, Geri). Dokunmatik gerekmez.
-- **API ayarları uygulamanın içinden değiştirilir**: sağlayıcı (Groq / OpenAI / kendi sunucun), adres, anahtar, model, dil, sessizlik süresi vb.
+- **The remote's assistant/microphone key opens this app** (it is set as the default assistant).
+- Press the key → speak → on silence (or OK) the speech is transcribed → the text is **typed into the focused search/text field**.
+  If no field is found, the text is copied to the clipboard and shown on screen.
+- Other apps that ask for speech recognition (`SpeechRecognizer` / `RECOGNIZE_SPEECH`) are served too.
+- **Searches SmartTube and Nuvio together** (changeable in Settings):
+  - *Search both* (default): after you speak, two rows of horizontal cards appear: **SmartTube · YouTube** videos on top (thumbnail,
+    duration, channel, views, date) and **Nuvio · Movies / Series** below (poster, year, rating, genre, overview). Left/Right: browse,
+    Up/Down: switch rows, OK: open (videos play in SmartTube, titles open in Nuvio). Buttons at the bottom: *Search all results in
+    SmartTube* and *Type into the focused field*.
+  - *Always SmartTube* opens SmartTube's search results directly; *Always Nuvio* shows only the Nuvio row; *Only type into the field* is the plain dictation mode.
+  - The YouTube row uses a keyless web search; you can enter a YouTube Data API key in Settings. Nuvio has no search deep link, so titles come
+    from Cinemeta (keyless); with a TMDB key you also get localized titles.
+- **Weather**: say "weather in London", "what's the weather like in Paris tomorrow", "will it rain tomorrow", "how many degrees is it in
+  New York", "day after tomorrow weather in Berlin" (Turkish: "İstanbul hava durumu", "yarın Ankara'da hava nasıl olacak" …) and **only the weather panel**
+  opens (current conditions, hourly and 7-day forecast; Open-Meteo, keyless). "Tomorrow" / "day after tomorrow" show that day's summary.
+  If you don't name a city ("weather"), the default city from Settings is used (London in English, İstanbul in Turkish — change it in Settings).
+  Everything that is not a weather question is searched as before; if the spoken place isn't a real place, it falls back to a normal search.
+  Fahrenheit and mph are used when the interface is English and the TV's region is the US. The panel has *Close* and *Search in YouTube / Nuvio* buttons.
+- **Choose the SmartTube / Nuvio package** (Settings › Search target › *SmartTube package*, *Nuvio package*): *Automatic* (default), a preset list,
+  or *Enter another package name…*. Presets: SmartTube `org.smarttube.stable`, SmartTube Beta `org.smarttube.beta`; Nuvio `com.nuvio.tv` (original),
+  Nuvio Arc `com.nuvio.tv.test`, Nuvio Native Legacy `space.nuvio.nativelegacy`, Nuvio Reshaped `com.nuvioreshaped.tv`. Installed ones are marked ✓.
+- **Fully remote-controlled** (arrows, OK, Back). No touch needed.
+- **API settings live inside the app**: provider (Groq / OpenAI / your own server), address, key, model, speech language, silence length, etc.
+  (*Speech language* is the language Whisper listens for; it is separate from the interface language.)
 
-## Kumanda kullanımı
+## Remote control
 
-| Tuş | Ayarlar ekranında | Dinleme ekranında |
+| Key | In Settings | On the listening screen |
 |---|---|---|
-| Yukarı / Aşağı | Satırlar arasında gez | — |
-| OK | Satırı aç / değiştir | Konuşmayı hemen bitir ve çevir |
-| Asistan tuşu | (ana işlev) dinlemeyi başlat | Konuşmayı hemen bitir |
-| Geri | Çık | İptal |
+| Up / Down | Move between rows | — |
+| OK | Open / change the row | Finish speaking now and transcribe |
+| Assistant key | (main function) start listening | Finish speaking now |
+| Back | Exit | Cancel |
 
-## Hızlı kurulum (Windows — önerilen)
+## Quick install (Windows — recommended)
 
-1. [Releases](../../releases) sayfasından **`SesliArama-kurulum.zip`** dosyasını indir ve bir klasöre çıkar (içindekiler aynı klasörde kalsın).
-2. **TV'de bir kerelik hazırlık:** Ayarlar → Cihaz tercihleri → Hakkında → *Derleme* satırına 7 kez OK (geliştirici modu açılır).
-   Sonra Geliştirici seçenekleri → **USB hata ayıklama** (varsa **Ağ hata ayıklama**) → *Açık*. TV'nin IP adresini not et (Ayarlar → Ağ ve İnternet).
-3. **`kurulum.bat`** dosyasına çift tıkla ve TV'nin IP adresini yaz. İlk bağlanışta TV'de çıkan "USB hata ayıklamaya izin verilsin mi?"
-   penceresinde **Her zaman izin ver**'i seç. (Bilgisayar ve TV aynı modemde olmalı.)
-4. İstersen Groq API anahtarını yapıştır ([ücretsiz anahtar al](https://console.groq.com/keys)); boş bırakırsan sonra uygulamanın Ayarlar ekranından girersin.
-5. "KURULUM TAMAM" yazısını görünce kumandadaki **asistan / mikrofon tuşuna** bas ve konuş.
+1. Download **`VoiceSearch-installer.zip`** from the [Releases](../../releases) page and extract it into one folder (keep the files together).
+2. **One-time preparation on the TV:** Settings → Device Preferences → About → press OK on *Build* 7 times (developer mode).
+   Then Developer options → turn **USB debugging** (and **Network debugging**, if present) *ON*. Note the TV's IP address (Settings → Network & Internet).
+3. Double-click **`install.bat`** (the installer's language follows Windows) and enter the TV's IP address. On the first
+   connection the TV asks "Allow USB debugging?" — choose **Always allow**. (The computer and the TV must be on the same router.)
+4. Optionally paste your Groq API key ([get a free key](https://console.groq.com/keys)); if you leave it empty you can enter it later in the app's Settings.
+5. When you see "SETUP COMPLETE", press the **assistant / microphone key** on the remote and speak.
 
-`kurulum.bat` şunları yapar: gerekirse adb'yi Google'ın resmi adresinden indirmeyi önerir → TV'ye bağlanır → APK'yı kurar (varsa günceller) →
-mikrofon iznini verir → uygulamayı varsayılan asistan, konuşma tanıma ve erişilebilirlik servisi yapar → (isteğe bağlı) API anahtarını TV'ye aktarır →
-ayar ekranını açar. Kayıt: `kurulum.log`. Geri almak için komut satırından `kurulum.bat kaldir` (İngilizce: `install.bat uninstall`; eski asistan ayarlarını geri yükler, uygulamayı siler).
+`install.bat` does this: offers to download adb from Google's official address if needed → connects to the TV → installs (or updates) the APK →
+grants the microphone permission → sets the app as default assistant, speech-recognition and accessibility service → (optionally) sends the API
+key to the TV → opens the Settings screen. Log: `install.log`. To undo: `install.bat uninstall` (restores the previous assistant settings and removes the app).
 
-- Sorusuz çalıştırma: `kurulum.bat auto` (TV adresi `tv.txt` dosyasında ya da `VT_TV` ortam değişkeninde olmalı; anahtar için `VT_KEY`).
-- Kurulum penceresi hata verirse `kurulum.log` dosyasına bak; en sık sebep: TV'de hata ayıklama kapalı, IP yanlış ya da TV'deki izin penceresi onaylanmadı.
-- API anahtarı adb ile uygulamanın dahili ayar alıcısına (`ConfigReceiver`) yollanır; alıcı `android.permission.DUMP` ister, yani yalnızca adb/shell gönderebilir, TV'deki başka bir uygulama ayar değiştiremez. Anahtar loga yazılmaz.
-- Release APK, hata ayıklama anahtarıyla imzalıdır (kişisel kullanım). Güvenmek istemiyorsan kaynaktan kendin derle (`scripts\release.bat` → `dist\`).
+- Unattended: `install.bat auto` (the TV address must be in `tv.txt` or the `VT_TV` environment variable; `VT_KEY` for the API key).
+- Force the installer language with `VT_LANG=en` or `VT_LANG=tr`.
+- If the installer fails, read `install.log`. Most common causes: debugging is off on the TV, a wrong IP, or the TV's permission prompt was not accepted.
+- The API key is sent over adb to the app's internal settings receiver (`ConfigReceiver`); it requires `android.permission.DUMP`, so only adb/shell can send it
+  and no other app on the TV can change settings. The key is never written to logs.
+- The release APK is signed with the debug key (personal use). If you don't want to trust a prebuilt APK, build it yourself (`scripts\release.bat` → `dist\`).
 
-## Kaynaktan derleyip kurma (geliştiriciler)
+## Build from source (developers)
 
-Gerekenler: **Android Studio** (SDK + platform-tools ile gelir) ve TV ile aynı ağda bir bilgisayar.
+You need **Android Studio** (comes with the SDK and platform-tools) and a computer on the same network as the TV.
 
-1. **TV'de ağ hata ayıklamayı aç**
-   Ayarlar → Cihaz tercihleri → Hakkında → *Derleme* satırına 7 kez OK (geliştirici modu).
-   Sonra Ayarlar → Cihaz tercihleri → Geliştirici seçenekleri → **USB hata ayıklama / Ağ hata ayıklama: Açık**.
-   TV'nin IP adresini not et (Ayarlar → Ağ). Port genelde `5555`.
-2. `scripts\tv.example.txt` dosyasını `scripts\tv.txt` olarak kopyala, içine `IP:5555` yaz (örn. `192.168.1.50:5555`).
-3. **API anahtarı** (ücretsiz): <https://console.groq.com/keys> adresinden Groq anahtarı al.
-   `scripts\config.example.json` dosyasını proje köküne `config.json` olarak kopyala, `apiKey` alanına yaz.
-   (Anahtar APK'nın içine gömülmez; kurulumda TV'ye aktarılır ve alınınca dosya silinir. İstersen bunu atlayıp
-   anahtarı uygulamanın içinden de girebilirsin.)
-4. `scripts\build.bat` çalıştır → `app\build\outputs\apk\debug\app-debug.apk`
-5. TV açıkken `scripts\install.bat` çalıştır. İlk bağlanışta TV'de "USB hata ayıklamaya izin ver?" çıkarsa **Her zaman izin ver** de.
-   Betik: APK'yı kurar, mikrofon iznini verir, uygulamayı **varsayılan asistan + konuşma tanıma servisi + erişilebilirlik servisi** yapar, ayar ekranını açar.
+1. Enable network debugging on the TV (see above). The port is usually `5555`.
+2. Copy `scripts\tv.example.txt` to `scripts\tv.txt` and write `IP:5555` in it (e.g. `192.168.1.50:5555`).
+3. API key (free): get a Groq key at <https://console.groq.com/keys>. Copy `scripts\config.example.json` to `config.json` in the project root and put
+   it in `apiKey` (the key is not embedded in the APK; it is sent to the TV at install time and the file is deleted once imported). You can also skip this and enter the key in the app.
+4. Run `scripts\build.bat` → `app\build\outputs\apk\debug\app-debug.apk`
+5. With the TV on, run `scripts\install.bat`: it installs the APK, grants the microphone permission, makes the app the **default assistant + speech-recognition + accessibility service** and opens Settings.
+
+Translations live in `app/src/main/res/values/strings.xml` (English, the default) and `values-tr/strings.xml` (Turkish); `Lang.kt` picks the language at run time.
 
 ### Test
 
-1. Uygulamayı aç (Uygulamalar listesinde "Sesli Arama (STT)").
-2. "Bağlantıyı test et" → "Tamam" görmelisin.
-3. "Mikrofon testi" → konuş, seviye çubuğu hareket etmeli.
-4. Bir arama kutusuna (ör. TV'nin arama ekranı) gel, **kumandadaki mikrofon tuşuna** bas, konuş.
+1. Open the app ("Voice Search (STT)" in the app list; "Sesli Arama (STT)" on a Turkish TV).
+2. *Test the connection* → you should see "OK".
+3. *Microphone / listening test* → speak; the level should move.
+4. Go to a search box, press the **remote's microphone key** and speak.
 
-### Sorun giderme
+### Troubleshooting
 
-| Belirti | Ne yapmalı |
+| Symptom | What to do |
 |---|---|
-| Mikrofon tuşuna basınca **hiçbir şey olmuyor** (TCL / MediaTek TV) | Kök neden: TV yazılımı 3. parti uygulamaların arka planda başlatılmasını `APP_AUTO_START` izniyle engeller (varsayılan *ignore*); sistem asistan servisimize bağlanamaz ve bu başarısız durumu hatırlar. `scripts\setup.bat` izni verir (`cmd appops set … APP_AUTO_START allow`) ve bağlantıyı sıfırlar. Kalıcıdır, yeniden başlatmada da korunur; uygulamayı her `install` ettiğinde betik bunu yeniden uygular. |
-| Mikrofon tuşu hâlâ Google Asistan'ı açıyor | `scripts\keys.bat` çalıştırıp tuşa bas; `logs\keys.log` içinde tuş görünüyor mu bak. Uygulamadaki *Kumanda tuş testi*ni de dene. Sonra `scripts\logcat.bat clear`, tuşa bas, `scripts\logcat.bat` ve `logs\logcat.log` dosyasına bak. |
-| Kumanda mikrofonu sessiz (seviye hep 0) | Bazı kumandalar sesi Bluetooth/özel kanaldan sisteme verir ve 3. parti uygulamalara açmaz. Ayarlardan *Ses kaynağı* ve *Mikrofon cihazı* seçeneklerini dene; olmuyorsa TV'ye USB mikrofon veya telefon mikrofonu gerekir. |
-| Metin yazılmıyor, panoya kopyalanıyor | Erişilebilirlik servisi kapalı olabilir (ana ekrandaki durum satırına bak) ya da uygulamanın arama kutusu standart değil. |
-| "Bağlantı yok / 401" | Adres, anahtar ve modeli ayarlardan kontrol et. |
-| Hata bildirecek misin? | `kurulum.log` / `logs\*.log` dosyasını yalnızca **TV'nin IP adresini `x.x.x.x` ile değiştirdikten sonra** ekle; API anahtarını (ya da bir parçasını) hiçbir yerde paylaşma. |
-| Eski haline dönmek | `scripts\restore.bat` — kurulumdan önceki asistan/tanıma/erişilebilirlik ayarlarını geri yükler. |
+| Pressing the mic key **does nothing** (TCL / MediaTek TV) | Root cause: the TV firmware blocks 3rd-party apps from being started in the background through the `APP_AUTO_START` permission (default *ignore*); the system can't bind to our assistant service and remembers the failure. `scripts\setup.bat` grants the permission (`cmd appops set … APP_AUTO_START allow`) and resets the binding. It persists across reboots; the script re-applies it on every install. |
+| The mic key still opens Google Assistant | Run `scripts\keys.bat` and press the key; see whether it appears in `logs\keys.log`. Also try *Remote key test* in the app. Then `scripts\logcat.bat clear`, press the key, `scripts\logcat.bat` and read `logs\logcat.log`. |
+| The remote's microphone is silent (level always 0) | Some remotes send audio over Bluetooth/a private channel and don't expose it to 3rd-party apps. Try *Audio source* and *Microphone device* in Settings; otherwise you need a USB or phone microphone. |
+| Text isn't typed, it is copied to the clipboard | The accessibility service may be off (see the status row on the main screen) or the app's search box is non-standard. |
+| "No connection / 401" | Check the address, key and model in Settings. |
+| Filing an issue? | Attach `install.log` / `logs\*.log` only **after replacing your TV's IP address with `x.x.x.x`**, and never paste an API key (or any part of one) anywhere public. |
+| Go back to the original state | `scripts\restore.bat` — restores the assistant / recognition / accessibility settings from before the install. |
 
-## Elle komutlar (betik kullanmak istemezsen)
+## Manual commands (if you prefer not to use the scripts)
 
 ```
 adb connect IP:5555
@@ -113,87 +126,89 @@ adb shell settings put secure enabled_accessibility_services com.voiceasistanttv
 adb shell settings put secure accessibility_enabled 1
 ```
 
-## API sağlayıcıları
+## API providers
 
-`POST {adres}/audio/transcriptions` (OpenAI uyumlu) kullanır; bu yüzden şunlarla çalışır:
+It uses `POST {address}/audio/transcriptions` (OpenAI compatible), so it works with:
 
-- **Groq** (varsayılan, ücretsiz katman): `https://api.groq.com/openai/v1`, model `whisper-large-v3-turbo`
+- **Groq** (default, free tier): `https://api.groq.com/openai/v1`, model `whisper-large-v3-turbo`
 - **OpenAI**: `https://api.openai.com/v1`, model `gpt-4o-mini-transcribe` / `whisper-1`
-- **Kendi sunucun** (LAN'da faster-whisper-server vb.): `http://192.168.1.10:8000/v1`, anahtar boş olabilir
+- **Your own server** (e.g. faster-whisper-server on your LAN): `http://192.168.1.10:8000/v1`, the key may be empty
 
-## Gizlilik
+## Privacy
 
-- **Ses**: konuşma sesi, seçtiğin API sağlayıcısına (varsayılan Groq) gönderilir; başka yere gönderilmez, saklanmaz. Mikrofon yalnızca dinleme ekranı açıkken kullanılır. Ücretsiz katmanların veri kullanım koşullarını sağlayıcının sayfasından kontrol et.
-- **Konuşmanın metni**: aranan kelimeler YouTube (anahtarsız web araması), Cinemeta / TMDB (film/dizi) ve — hava sorusuysa — Open-Meteo'ya (yalnızca şehir adı) gider.
-- **Bağlantı ısıtma**: asistan tuşuna basıp dinleme başlayınca, sonuçlar daha çabuk gelsin diye uygulama konuşurken arama sunucularına (YouTube, TMDB, Groq) boş bir `HEAD` isteği atar. İçinde konuşma ya da kişisel veri yoktur; sunucular yalnızca bağlantı kurulduğunu (IP adresini) görür.
-- **Erişilebilirlik servisi** hiçbir ekran içeriğini okumaz/kaydetmez; yalnızca konuşma bitince odaktaki yazı alanını bulup metni oraya yazar.
-- API anahtarları yalnızca TV'deki uygulama ayarlarında tutulur (APK'ya gömülmez, loga yazılmaz).
-- Analitik, reklam ya da izleme yoktur.
+- **Audio**: your speech is sent to the API provider you choose (default Groq) and nowhere else; the app doesn't store it. The microphone is only used while the listening screen is open. Check the provider's data-use terms for free tiers.
+- **Recognized text**: searched words go to YouTube (keyless web search), Cinemeta / TMDB (movies/series) and — for weather questions — Open-Meteo (the city name only).
+- **Connection warm-up**: when listening starts, the app sends empty `HEAD` requests to the search servers (YouTube, TMDB, Groq) so results arrive faster. They contain no speech or personal data; the servers only see that a connection was made (your IP address).
+- The **accessibility service** doesn't read or record screen content; after you speak it only finds the focused text field and types the text there.
+- API keys are kept only in the app's settings on the TV (not embedded in the APK, not logged).
+- No analytics, ads or tracking.
 
-## Kaynaklar ve teşekkür
+## Credits
 
-- Hava verisi: **[Open-Meteo.com](https://open-meteo.com/)** (CC BY 4.0). Hava panelinde de belirtilir.
-- Film/dizi verisi: Cinemeta (Stremio) ve isteğe bağlı TMDB. *This product uses the TMDB API but is not endorsed or certified by TMDB.*
-- Video araması YouTube'dan; sonuçlar SmartTube'da açılır. SmartTube ve Nuvio ayrı uygulamalardır, bu proje onlarla bağlantılı değildir ve onları içermez; kendin kurman gerekir.
-- Mimari fikri: [Sayboard](https://github.com/ElishaAz/Sayboard) (GPL-3.0), bkz. `NOTICE.md`.
+- Weather data: **[Open-Meteo.com](https://open-meteo.com/)** (CC BY 4.0), also credited in the weather panel.
+- Movie/series data: Cinemeta (Stremio) and optionally TMDB. *This product uses the TMDB API but is not endorsed or certified by TMDB.*
+- Video search comes from YouTube; results open in SmartTube. SmartTube and Nuvio are separate apps; this project is not affiliated with them and does not include them — you install them yourself.
+- Architecture idea: [Sayboard](https://github.com/ElishaAz/Sayboard) (GPL-3.0), see `NOTICE.md`.
 
-## Klavye ile birlikte kullanım (isteğe bağlı)
+## Optional: use with a keyboard
 
-Varsayılan klavye *Simple Keyboard TV* (`rkr.simplekeyboard.inputmethod.tv`) ise, asistan tuşuna basılınca uygulama önce klavyeye
-`rkr.simplekeyboard.inputmethod.tv.action.VOICE_KEY` adlı sıralı bir yayın gönderir (en çok 0,7 sn bekler). Klavye bunu desteklerse kendi "sesle yaz"
-özelliğini başlatır ve metin alanı odağını kaybetmeden yazılır. Klavye yoksa / yanıt vermezse normal dinleme ekranı açılır. Bu davranış klavye yoksa hiçbir şey değiştirmez.
+If the default keyboard is *Simple Keyboard TV* (`rkr.simplekeyboard.inputmethod.tv`), pressing the assistant key first sends the keyboard an ordered broadcast
+`rkr.simplekeyboard.inputmethod.tv.action.VOICE_KEY` (waits at most 0.7 s). If the keyboard supports it, it starts its own voice typing and the text is typed without the field losing focus.
+If there is no keyboard or it doesn't answer, the normal listening screen opens. Without such a keyboard nothing changes.
 
-## Performans
+## Performance
 
-- Release APK yaklaşık **190 KB** (iki dil dahil) (R8 küçültme + kaynak küçültme). Hiçbir üçüncü taraf kütüphane yok; sadece Android framework'ü.
-- Asistan tuşuna basınca dinleme başlarken, konuşma sürerken arka planda arama sunucularına bağlantılar önceden kurulur (DNS + TLS ısıtma, ~0,5 sn). Konuşma bitince sonuç aramaları hazır bağlantıyla gider: ölçümümde (TCL TV, kendi ağım) ısıtılmış bağlantıyla film arama isteği ~40 ms'de döndü; ısıtmasız ilk istek yüzlerce ms ile birkaç saniye arasında sürebiliyor. Sonuçlar ağına göre değişir.
-- Mikrofon ve ağ yalnızca tuşa basıldığında kullanılır; uygulama kendi başına arka planda iş yapmaz (asistan ve erişilebilirlik servisleri sistem tarafından bağlanır, boştayken bir şey yapmaz).
+- The release APK is about **190 KB** (both languages included) (R8 + resource shrinking). No third-party libraries — only the Android framework.
+- While you speak, connections to the search servers are warmed up in the background (DNS + TLS, ~0.5 s). When speech ends, the searches use ready connections: in my measurement (TCL TV, my own network) a movie search returned in ~40 ms with a warm connection; a cold first request can take hundreds of ms to a few seconds. Results depend on your network.
+- The microphone and network are only used when you press the key; the app does nothing in the background on its own.
 
-## Yapı
+## Layout
 
 ```
 app/src/main/java/com/voiceasistanttv/stt/
-  Transcriber.kt          mikrofon + sessizlik algılama + yükleme
-  SttClient.kt            OpenAI uyumlu multipart istemci
-  AssistService.kt        asistan tuşu (VoiceInteractionService)
-  AppLauncher.kt          SmartTube / Nuvio bulma ve açma
-  MediaSearch.kt          film/dizi adı arama (Cinemeta / TMDB)
-  YouTubeSearch.kt        YouTube video arama (web / Data API)
-  Weather.kt              hava sorusu ayrıştırma (şehir/gün) + Open-Meteo istemcisi
-  Prewarm.kt              dinleme sırasında arama sunucularına bağlantı ısıtma
-  NetLog.kt               ağ çağrısı süre ölçümü (logcat, tag VoiceTV)
-  ConfigReceiver.kt       kurulum betiğinin adb ile ayar (API anahtarı) göndermesi (DUMP izinli)
-  KeyboardHandoff.kt      Simple Keyboard TV varsa dikteyi klavyeye devretme
-  WeatherUi.kt            hava paneli kartları + Canvas ile çizilen hava simgeleri
-  ResultCards.kt          sonuç kartları + küçük resim yükleyici
-  AssistActivity.kt       dinleme ekranı
-  CloudRecognitionService.kt  SpeechRecognizer servisi
-  InjectorService.kt      odaktaki alana yazma (erişilebilirlik)
-  MainActivity.kt         kumanda uyumlu ayar ekranı
-  KeyTestActivity.kt      kumanda tuş testi
-  Lang.kt                 arayüz dili seçimi + çeviri yardımcısı (res/values = İngilizce, res/values-tr = Türkçe)
-docs/img/                 README ekran görüntüleri
-kurulum.bat / install.bat  son kullanıcı kurulumu (adb + APK + asistan ataması; `kurulum.bat kaldir` / `install.bat uninstall` ile geri alma; Türkçe/İngilizce)
-scripts/                  all (derle+kur+test) / update (derle+kur) / build / install / setup / restore / logcat / keys / diag / shot (TV ekran görüntüsü)
-scripts/release.bat       release APK + dist\SesliArama-kurulum.zip (GitHub Releases'e yüklenecek paket)
+  Transcriber.kt          microphone + silence detection + upload
+  SttClient.kt            OpenAI-compatible multipart client
+  AssistService.kt        assistant key (VoiceInteractionService)
+  AppLauncher.kt          find and open SmartTube / Nuvio
+  MediaSearch.kt          movie/series search (Cinemeta / TMDB)
+  YouTubeSearch.kt        YouTube video search (web / Data API)
+  Weather.kt              weather-question parsing (city/day, EN+TR) + Open-Meteo client
+  Prewarm.kt              connection warm-up while listening
+  NetLog.kt               network call timing (logcat, tag VoiceTV)
+  ConfigReceiver.kt       lets the installer send settings (API key) over adb (DUMP-protected)
+  KeyboardHandoff.kt      hand dictation to Simple Keyboard TV if present
+  WeatherUi.kt            weather panel cards + Canvas-drawn weather icons
+  ResultCards.kt          result cards + small image loader
+  AssistActivity.kt       listening screen
+  CloudRecognitionService.kt  SpeechRecognizer service
+  InjectorService.kt      typing into the focused field (accessibility)
+  MainActivity.kt         remote-friendly settings screen
+  KeyTestActivity.kt      remote key test
+  Lang.kt                 interface language (Automatic / Türkçe / English) + string lookup
+app/src/main/res/values/strings.xml      English strings (default)
+app/src/main/res/values-tr/strings.xml   Turkish strings
+docs/img/                 README screenshots
+install.bat               end-user installer (adb + APK + assistant assignment; `install.bat uninstall` to undo; English/Turkish messages)
+scripts/                  all (build+install+test) / update / build / install / setup / restore / logcat / keys / diag / shot (TV screenshot)
+scripts/release.bat       release APK + dist\VoiceSearch-installer.zip (the package to upload to GitHub Releases)
 ```
 
-## Lisans
+## License
 
-Bu proje **GNU Genel Kamu Lisansı v3 (GPL-3.0)** altında özgür yazılımdır — bkz. [`LICENSE.txt`](LICENSE.txt). Kullanabilir, inceleyebilir, değiştirebilir ve
-dağıtabilirsin; türev çalışmalar da aynı lisansla ve kaynak koduyla birlikte kalmalıdır. **Hiçbir garanti verilmez.**
-Telif: Copyright (C) 2026 VoiceAsistantTV katkıda bulunanlar.
+This project is free software under the **GNU General Public License v3** — see [`LICENSE.txt`](LICENSE.txt). You may use, study, modify and
+redistribute it, provided derived works stay under the same license with their source available. It comes **without any warranty**.
+Copyright (C) 2026 the VoiceAsistantTV contributors.
 
-| Bölüm | Lisans / koşul |
+| Part | License / terms |
 |---|---|
-| Bu proje (kaynak kod, betikler, çeviriler, bu proje için çizilen uygulama simgesi ve TV afişi) | GPL-3.0 |
-| [Sayboard](https://github.com/ElishaAz/Sayboard) (ElishaAz) — türetildiği mimari fikri | GPL-3.0 |
+| This project (source, scripts, translations, app icon and TV banner — drawn for this project) | GPL-3.0 |
+| [Sayboard](https://github.com/ElishaAz/Sayboard) by ElishaAz — architecture idea this project is derived from | GPL-3.0 |
 | Gradle Wrapper (`gradlew`, `gradlew.bat`, `gradle/wrapper/`) | Apache License 2.0 (Gradle Inc.) |
-| APK içindeki üçüncü taraf kütüphaneler | yok — yalnızca Android framework API'leri kullanılır |
-| Hava verisi — [Open-Meteo.com](https://open-meteo.com/) | CC BY 4.0 (hava panelinde belirtilir). Ücretsiz API'si ticari olmayan kullanım içindir |
-| Film/dizi verisi — Cinemeta (Stremio), TMDB | kendi koşulları; *This product uses the TMDB API but is not endorsed or certified by TMDB.* |
-| Konuşma tanıma — Groq / OpenAI / kendi sunucun | **senin** API anahtarın ve **o sağlayıcının** kullanım koşulları geçerlidir |
-| `docs/img/` ekran görüntüleri | bu uygulamanın arayüzü; içindeki küçük resim/afişler sahiplerine aittir, yalnızca arayüzü göstermek için yer alır |
+| Third-party libraries inside the APK | none — only Android framework APIs are used |
+| Weather data — [Open-Meteo.com](https://open-meteo.com/) | CC BY 4.0 (credited in the weather panel). Its free API is meant for non-commercial use |
+| Movie/series data — Cinemeta (Stremio), TMDB | their own terms; *This product uses the TMDB API but is not endorsed or certified by TMDB.* |
+| Speech recognition — Groq / OpenAI / your own server | **your** API key and **that provider's** terms of service apply |
+| Screenshots in `docs/img/` | UI of this app; the thumbnails and posters in them belong to their owners and are shown only to illustrate the interface |
 
-SmartTube, Nuvio, YouTube, Groq, OpenAI, TMDB ve Open-Meteo ilgili sahiplerinin marka/ürünleridir; bu proje onlarla bağlantılı değildir ve onların yazılımını içermez.
-Ayrıntı: [`NOTICE.md`](NOTICE.md).
+SmartTube, Nuvio, YouTube, Groq, OpenAI, TMDB and Open-Meteo are trademarks/products of their respective owners; this project is not affiliated with
+them and does not include their software. See [`NOTICE.md`](NOTICE.md) for details.

@@ -3,7 +3,7 @@ package com.voiceasistanttv.stt
 import android.os.SystemClock
 import android.util.Log
 
-/** Ağ isteklerinin süresini logcat'e yazar (yalnız sunucu adı + ms; arama metni/adres sorgusu yazılmaz). */
+/** Writes the duration of network requests to logcat (server name + ms only; the search text / URL query is not written). */
 object NetLog {
     private const val TAG = "VoiceTV"
 
@@ -21,7 +21,7 @@ object NetLog {
             ok = true
             return r
         } finally {
-            Log.i("VoiceTV", "http ${host(url)} ${SystemClock.elapsedRealtime() - t0} ms" + if (ok) "" else " (hata)")
+            Log.i("VoiceTV", "http ${host(url)} ${SystemClock.elapsedRealtime() - t0} ms" + if (ok) "" else " (error)")
         }
     }
 }

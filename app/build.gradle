@@ -20,7 +20,7 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Kişisel kullanım: debug anahtarıyla imzala, böylece doğrudan kurulabilir.
+            // Personal use: sign with the debug key so it can be installed directly.
             signingConfig signingConfigs.debug
         }
     }
@@ -38,5 +38,5 @@ android {
 }
 
 dependencies {
-    // Bilerek boş: sadece Android framework API'leri kullanılıyor (hafif uygulama).
+    // Intentionally empty: only Android framework APIs are used (lightweight app).
 }

@@ -4,8 +4,8 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Android 11+: RecognitionService'i çağıran uygulamanın mikrofon iznini sorgulayabilmek için gerekli
-         (Sayboard'daki aynı çözüm). Kişisel/yan yükleme kullanımı için uygundur. -->
+    <!-- Android 11+: needed to be able to query the microphone permission of the app that calls the RecognitionService
+         (the same solution as in Sayboard). Suitable for personal / sideloaded use. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -31,7 +31,7 @@
         android:usesCleartextTraffic="true"
         tools:targetApi="34">
 
-        <!-- Ayar ekranı: kumandanın yön tuşları ve OK ile tamamen kullanılabilir -->
+        <!-- Settings screen: fully usable with the remote's D-pad and OK -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,7 +43,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Dinleme ekranı: asistan tuşu / ASSIST isteği bunu açar -->
+        <!-- Listening screen: opened by the assistant key / ASSIST request -->
         <activity
             android:name=".AssistActivity"
             android:excludeFromRecents="true"
@@ -64,20 +64,20 @@
                 <action android:name="android.intent.action.SEARCH_LONG_PRESS" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-            <!-- RecognizerIntent kullanan uygulamalar için: sonucu çağırana geri döndürür -->
+            <!-- For apps that use RecognizerIntent: returns the result to the caller -->
             <intent-filter>
                 <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
-        <!-- Kumanda tuş testi (hangi tuş hangi kodu gönderiyor?) -->
+        <!-- Remote key test (which key sends which code?) -->
         <activity
             android:name=".KeyTestActivity"
             android:exported="false"
             android:screenOrientation="landscape" />
 
-        <!-- Varsayılan asistan olarak atanabilen servis (kumandadaki asistan tuşunu devralır) -->
+        <!-- Service that can be set as the default assistant (takes over the remote's assistant key) -->
         <service
             android:name=".AssistService"
             android:exported="true"
@@ -95,7 +95,7 @@
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
-        <!-- Uygulamaların SpeechRecognizer API'si ile kullandığı sistem tanıyıcısı -->
+        <!-- The system recognizer that apps use through the SpeechRecognizer API -->
         <service
             android:name=".CloudRecognitionService"
             android:exported="true"
@@ -110,8 +110,8 @@
                 android:resource="@xml/recognition_service" />
         </service>
 
-        <!-- Kurulum betiğinin (adb shell) API anahtarı/ayar göndermesi için. Yalnız android.permission.DUMP
-             sahibi gönderebilir (adb shell'de var; normal uygulamalarda yok) → başka uygulama ayar değiştiremez. -->
+        <!-- For the install script (adb shell) to send the API key / settings. Only a holder of android.permission.DUMP
+             can send (adb shell has it; normal apps do not) -> no other app can change the settings. -->
         <receiver
             android:name=".ConfigReceiver"
             android:exported="true"
@@ -121,7 +121,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Çevrilen metni odaktaki metin alanına yazan erişilebilirlik servisi (isteğe bağlı) -->
+        <!-- Accessibility service that writes the transcribed text into the focused text field (optional) -->
         <service
             android:name=".InjectorService"
             android:exported="true"

@@ -8,18 +8,18 @@ import java.net.URL
 import java.util.Locale
 
 /**
- * Konuşulan cümle bir hava durumu sorusu mu? ("İstanbul hava durumu", "İstanbul'da bugün hava nasıl",
- * "yarın Ankara kaç derece", "weather in London", "will it rain tomorrow in Paris" …). Her iki dil de
- * (arayüz dilinden bağımsız) tanınır. Evetse şehri ve günü çıkarır; hayırsa null döner ve normal arama sürer.
+ * Is the spoken sentence a weather question? ("hava durumu Istanbul", "weather in London", "will it rain tomorrow in Paris",
+ * "yarin Ankara kac derece" ...). Both languages are recognized (independent of the UI language). If yes, it extracts
+ * the city and the day; if not, it returns null and the normal search continues.
  */
 object WeatherQuery {
-    /** city: konuşmada geçen yer adı (yoksa null → ayarlardaki varsayılan şehir); dayOffset: 0 bugün, 1 yarın, 2 öbür gün. */
+    /** city: place name found in the speech (null -> the default city from the settings); dayOffset: 0 today, 1 tomorrow, 2 day after tomorrow. */
     class Query(val city: String?, val dayOffset: Int)
 
     private const val FROM = "ıçğöşüâîû"
     private const val TO = "icgosuaiu"
 
-    /** Küçük harf + Türkçe karakterleri sadeleştirme (uzunluk değişmez). */
+    /** Lower-case + fold Turkish characters to plain ASCII (length does not change). */
     fun norm(s: String): String {
         val l = s.lowercase(Locale("tr", "TR"))
         val sb = StringBuilder(l.length)
@@ -87,7 +87,7 @@ object WeatherQuery {
         val city = ArrayList<String>()
         for (raw in text.split(Regex("[\\s,.?!;:\"“”()]+"))) {
             if (raw.isBlank()) continue
-            // "İstanbul'da", "Ankara’daki" → ek kalkar
+            // "Istanbul'da", "Ankara'daki" -> the suffix is dropped
             val base = raw.substringBefore('\'').substringBefore('’').substringBefore('ʼ')
             if (base.isBlank()) continue
             if (norm(base) in stop) continue
@@ -98,7 +98,7 @@ object WeatherQuery {
     }
 }
 
-/** Open-Meteo (anahtarsız, ücretsiz): yer arama + tahmin. Ağ çağrıları yapar; ana iş parçacığından çağırma. */
+/** Open-Meteo (keyless, free): place search + forecast. Makes network calls; do not call from the main thread. */
 object WeatherClient {
     class Place(val name: String, val admin: String, val country: String, val lat: Double, val lon: Double) {
         fun label(): String {
@@ -135,7 +135,7 @@ object WeatherClient {
         val hours: List<Hour>
     )
 
-    /** report doluysa başarılı; notFound: yer bulunamadı (hava sorusu değilmiş olabilir); aksi halde error. */
+    /** A non-null report means success; notFound: place not found (it may not have been a weather question); otherwise error. */
     class Outcome(val report: Report?, val notFound: Boolean, val error: String?)
 
     fun fetch(cityText: String, dayOffset: Int): Outcome {
@@ -154,7 +154,7 @@ object WeatherClient {
         "da", "de", "ta", "te", "in", "un", "ın", "ün"
     )
 
-    /** "Ankarada" → ["Ankarada", "Ankara"]: Whisper bazen kesme işareti koymaz. */
+    /** "Ankarada" -> ["Ankarada", "Ankara"]: Whisper sometimes omits the apostrophe. */
     private fun candidates(raw: String): List<String> {
         val out = ArrayList<String>()
         out.add(raw)
@@ -194,7 +194,7 @@ object WeatherClient {
             val hit = res.firstOrNull { p -> normed.any { similar(WeatherQuery.norm(p.name), it) } }
             if (hit != null) return hit
         }
-        // Yer adı öbür dilde söylenmiş olabilir ("Münih" / "Munich"): yalnız ilk aday için öbür dili de dene.
+        // The place name may have been spoken in the other language ("Munih" / "Munich"): try the other language too, for the first candidate only.
         val other = if (primary == "tr") "en" else "tr"
         return geocode(cands[0], other).firstOrNull { p -> normed.any { similar(WeatherQuery.norm(p.name), it) } }
     }
@@ -265,7 +265,7 @@ object WeatherClient {
         )
     }
 
-    /** Bugün: şimdiden itibaren 2 saatlik adımlarla 10 kart; yarın/öbür gün: o günün 06:00–22:00 arası 2 saatlik adımlar. */
+    /** Today: 10 cards in 2-hour steps from now; tomorrow / day after: 2-hour steps from 06:00 to 22:00 that day. */
     private fun buildHours(h: JSONObject, now: String, dayOffset: Int, days: List<Day>): List<Hour> {
         val times = h.getJSONArray("time")
         val temps = h.getJSONArray("temperature_2m")
@@ -333,7 +333,7 @@ object WeatherClient {
         }
     }
 
-    // ---------------------------------------------------------------- WMO hava kodları
+    // ---------------------------------------------------------------- WMO weather codes
 
     enum class Kind { SUN, MOON, PARTLY_DAY, PARTLY_NIGHT, CLOUD, FOG, RAIN, SNOW, STORM }
 

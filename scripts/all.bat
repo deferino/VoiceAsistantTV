@@ -1,5 +1,5 @@
 @echo off
-rem TEK TIK: derle -> TV'ye kur -> asistan olarak ata -> mikrofon tusu testi.
+rem ONE CLICK: build -> install on the TV -> set as assistant -> mic key test.
 setlocal EnableExtensions
 cd /d "%~dp0.."
 if exist logs\build.status del logs\build.status
@@ -9,9 +9,9 @@ if not "%BS%"=="0" goto fail
 call scripts\install.bat auto
 call scripts\test-key.bat auto
 echo.
-echo HEPSI BITTI. Bana "bitti" yaz, loglari okuyayim.
+echo ALL DONE. The logs are in the logs folder.
 goto end
 :fail
-echo DERLEME BASARISIZ - logs\build.log dosyasini bana bildir.
+echo BUILD FAILED - see logs\build.log
 :end
 pause

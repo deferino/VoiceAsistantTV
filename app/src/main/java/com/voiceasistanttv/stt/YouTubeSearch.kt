@@ -10,10 +10,10 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * YouTube video araması (SmartTube'da oynatılacak sonuçları listelemek için).
- *  1) YouTube anahtarı girilmişse resmi Data API v3 (search.list),
- *  2) yoksa/başarısızsa anahtarsız web arama uç noktası (SmartTube/NewPipe gibi uygulamaların kullandığı InnerTube).
- * Ağ çağrıları yapar: ana iş parçacığından çağırma.
+ * YouTube video search (to list results that will play in SmartTube).
+ *  1) The official Data API v3 (search.list) if a YouTube key is entered,
+ *  2) otherwise / on failure the keyless web search endpoint (the InnerTube used by apps like SmartTube/NewPipe).
+ * Makes network calls: do not call from the main thread.
  */
 object YouTubeSearch {
     private const val MAX_ITEMS = 6
@@ -47,7 +47,7 @@ object YouTubeSearch {
         }
     }
 
-    // ---------------------------------------------------------------- resmi API
+    // ---------------------------------------------------------------- official API
 
     private fun official(q: String, key: String): List<Video> {
         val url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8" +
@@ -73,7 +73,7 @@ object YouTubeSearch {
         return list
     }
 
-    // ---------------------------------------------------------------- anahtarsız web uç noktası
+    // ---------------------------------------------------------------- keyless web endpoint
 
     private fun innerTube(q: String): List<Video> {
         val client = JSONObject()
@@ -84,7 +84,7 @@ object YouTubeSearch {
         val body = JSONObject()
             .put("context", JSONObject().put("client", client))
             .put("query", q)
-            .put("params", "EgIQAQ==") // yalnızca videolar
+            .put("params", "EgIQAQ==") // videos only
         val headers = mapOf(
             "Content-Type" to "application/json",
             "X-YouTube-Client-Name" to "1",
@@ -129,7 +129,7 @@ object YouTubeSearch {
         return sb.toString()
     }
 
-    // ---------------------------------------------------------------- yardımcılar
+    // ---------------------------------------------------------------- helpers
 
     private fun unescape(s: String): String =
         if (Build.VERSION.SDK_INT >= 24) Html.fromHtml(s, Html.FROM_HTML_MODE_LEGACY).toString()

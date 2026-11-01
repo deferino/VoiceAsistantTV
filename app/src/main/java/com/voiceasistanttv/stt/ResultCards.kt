@@ -22,7 +22,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
-/** Küçük resimleri/afişleri arka planda indirip küçük bir önbellekte tutar (az RAM: RGB_565 + örnekleme). */
+/** Downloads thumbnails/posters in the background and keeps them in a small cache (low RAM: RGB_565 + sampling). */
 object ImageLoader {
     private val cache = object : LruCache<String, Bitmap>(6 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
@@ -77,11 +77,11 @@ object ImageLoader {
     }
 }
 
-/** Sığmayan (yarım kalacak) satırları hiç çizmeyen dikey sütun: kart metni yarım kesilmiş görünmesin. */
+/** Vertical column that does not draw rows that do not fit (would be cut in half), so the card text never looks half-cut. */
 class FitColumn(ctx: Context) : LinearLayout(ctx) {
     override fun drawChild(canvas: android.graphics.Canvas, child: View, drawingTime: Long): Boolean {
-        // İlk satır (başlık) hep çizilir; diğer satırlar tam sığmıyorsa (LinearLayout metni kalan yüksekliğe
-        // kırptığı için yarım satır görünür) hiç çizilmez.
+        // The first row (title) is always drawn; the other rows are not drawn at all if they do not fully fit (LinearLayout
+        // crops the text to the remaining height, which would show a half row).
         if (indexOfChild(child) > 0) {
             val lay = (child as? TextView)?.layout
             val needed = if (lay != null) lay.height + child.totalPaddingTop + child.totalPaddingBottom else child.height
@@ -91,7 +91,7 @@ class FitColumn(ctx: Context) : LinearLayout(ctx) {
     }
 }
 
-/** Sonuç kartları: YouTube videosu (yatay küçük resim) ve film/dizi (afiş + ayrıntılar). Tasarım dili ayar ekranıyla aynı. */
+/** Result cards: YouTube video (wide thumbnail) and movie/series (poster + details). Same design language as the settings screen. */
 object ResultCards {
     private const val WHITE = 0xFFFFFFFF.toInt()
     private const val GRAY = 0xFFB8BCC6.toInt()
@@ -133,7 +133,7 @@ object ResultCards {
         return c
     }
 
-    /** k: ekran yüksekliğine göre ölçek (küçük ekranlarda kartlar küçülür). */
+    /** k: scale based on screen height (cards shrink on small screens). */
     fun videoCard(ctx: Context, v: YouTubeSearch.Video, k: Float, onPick: () -> Unit): View {
         val w = ctx.dp((192 * k).toInt())
         val h = w * 9 / 16

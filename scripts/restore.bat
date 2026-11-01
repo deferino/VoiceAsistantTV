@@ -1,11 +1,11 @@
 @echo off
-rem Asistan / konusma tanima / erisilebilirlik ayarlarini kurulumdan onceki degerlere dondurur.
-rem Kullanim: scripts\restore.bat   |   scripts\restore.bat auto
+rem Restores the assistant / speech-recognition / accessibility settings to their values from before the install.
+rem Usage: scripts\restore.bat   |   scripts\restore.bat auto
 setlocal EnableExtensions
 cd /d "%~dp0.."
 if not exist logs mkdir logs
 set "LOG=logs\restore.log"
-> "%LOG%" echo [%date% %time%] geri yukleme
+> "%LOG%" echo [%date% %time%] restore
 if not exist scripts\tv.txt goto notv
 set /p TV=<scripts\tv.txt
 set "ADB="
@@ -16,13 +16,13 @@ if not defined ADB goto noadb
 "%ADB%" connect %TV% >> "%LOG%" 2>&1
 "%ADB%" -s %TV% push scripts\restore-defaults.sh /data/local/tmp/vt-restore.sh >> "%LOG%" 2>&1
 "%ADB%" -s %TV% shell sh /data/local/tmp/vt-restore.sh >> "%LOG%" 2>&1
-echo Geri yukleme tamam. Ayrinti: %LOG%
+echo Restore done. Details: %LOG%
 goto end
 :notv
-echo scripts\tv.txt yok.
+echo scripts\tv.txt not found.
 goto end
 :noadb
-echo adb bulunamadi.
+echo adb not found.
 :end
 if /i "%~1"=="auto" exit /b 0
 pause

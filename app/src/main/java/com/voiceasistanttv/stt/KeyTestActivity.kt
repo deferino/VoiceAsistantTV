@@ -8,9 +8,9 @@ import android.view.KeyEvent
 import android.widget.TextView
 
 /**
- * Kumandadaki tuşların hangi tuş koduyla geldiğini gösterir.
- * Asistan/mikrofon tuşuna basınca burada hiçbir şey görünmüyorsa sistem tuşu uygulamaya hiç iletmiyor
- * demektir (bu durumda tuşu varsayılan asistan atamasıyla devralıyoruz). Çıkmak için Geri'ye 2 kez bas.
+ * Shows which key code each remote key arrives with.
+ * If nothing shows up here when you press the assistant/microphone key, the system is not delivering the key to apps at all
+ * (in that case we take the key over by being the default assistant). Press Back twice to exit.
  */
 class KeyTestActivity : Activity() {
     private lateinit var tv: TextView

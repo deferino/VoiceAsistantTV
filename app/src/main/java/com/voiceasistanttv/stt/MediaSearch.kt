@@ -11,17 +11,17 @@ import java.text.Normalizer
 import java.util.Locale
 
 /**
- * Konuşulan film/dizi adını başlık listesine çevirir (Nuvio'da arama bağlantısı olmadığı için).
- *  - Varsayılan: Cinemeta (Stremio'nun herkese açık, anahtarsız IMDb kataloğu).
- *  - TMDB anahtarı girilmişse: TMDB (Türkçe adlarla da eşleşir, language=tr-TR).
- * Ağ çağrıları yapar: ana iş parçacığından çağırma.
+ * Converts the spoken movie/series name into a title list (because Nuvio has no search link).
+ *  - Default: Cinemeta (Stremio's public, keyless IMDb catalog).
+ *  - If a TMDB key is entered: TMDB (also matches Turkish titles, language=tr-TR).
+ * Makes network calls: do not call from the main thread.
  */
 object MediaSearch {
     private const val MAX_ITEMS = 8
 
     class Item(
         val type: String, // "movie" | "series"
-        val imdbId: String, // "tt…" ya da boş (TMDB sonucu; seçilince çözülür)
+        val imdbId: String, // "tt…" or empty (TMDB result; resolved when picked)
         val title: String,
         val year: String,
         val tmdbId: Long = 0L,
@@ -56,7 +56,7 @@ object MediaSearch {
         return Outcome(rank(items, q).take(MAX_ITEMS), null)
     }
 
-    /** TMDB sonucunun IMDb kimliğini bulur (Nuvio'nun en sağlam açtığı kimlik). */
+    /** Finds the IMDb id of a TMDB result (the id Nuvio opens most reliably). */
     fun resolveImdb(item: Item, tmdbKey: String): String? = try {
         val kind = if (item.type == "movie") "movie" else "tv"
         val bearer = isBearer(tmdbKey)
@@ -115,7 +115,7 @@ object MediaSearch {
 
     // ---------------------------------------------------------------- TMDB
 
-    private fun isBearer(key: String) = key.trim().length > 40 // v4 "Read Access Token" (JWT) ise
+    private fun isBearer(key: String) = key.trim().length > 40 // if it is a v4 "Read Access Token" (JWT)
 
     private fun tmdb(q: String, key: String): List<Item> {
         val bearer = isBearer(key)
@@ -145,7 +145,7 @@ object MediaSearch {
         return list
     }
 
-    // ---------------------------------------------------------------- yardımcılar
+    // ---------------------------------------------------------------- helpers
 
     private fun norm(s: String): String {
         val folded = Normalizer.normalize(s.replace('ı', 'i').replace('İ', 'I'), Normalizer.Form.NFD)
@@ -153,7 +153,7 @@ object MediaSearch {
         return folded.lowercase(Locale.ROOT).filter { it.isLetterOrDigit() }
     }
 
-    /** Aranan ada en çok benzeyenler öne; eşitlikte kaynak sırası korunur. */
+    /** Closest matches to the searched name first; ties keep the source order. */
     private fun rank(items: List<Item>, q: String): List<Item> {
         val nq = norm(q)
         fun score(it: Item): Int {

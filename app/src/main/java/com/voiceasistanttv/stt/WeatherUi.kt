@@ -15,7 +15,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Calendar
 
-/** Hava durumu simgeleri: yazı tipine bağlı olmasın diye Canvas ile çizilir (emoji yok, bellek az). */
+/** Weather icons: drawn with Canvas so they do not depend on a font (no emoji, low memory). */
 class WeatherIconView(ctx: Context, private val kind: WeatherClient.Kind) : View(ctx) {
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
@@ -111,7 +111,7 @@ class WeatherIconView(ctx: Context, private val kind: WeatherClient.Kind) : View
         c.drawPath(path, p)
     }
 
-    /** x,y: bulutun sol-üst köşesi; w: genişlik (yükseklik ≈ 0.62·w). */
+    /** x,y: top-left corner of the cloud; w: width (height ≈ 0.62·w). */
     private fun cloud(c: Canvas, x: Float, y: Float, w: Float, color: Int) {
         p.style = Paint.Style.FILL
         p.color = color
@@ -135,7 +135,7 @@ class WeatherIconView(ctx: Context, private val kind: WeatherClient.Kind) : View
     }
 }
 
-/** Hava paneli kartları. kk: ekran yüksekliğine göre ölçek (540 dp yükseklikte 1.0). */
+/** Weather panel cards. kk: scale based on screen height (1.0 at 540 dp height). */
 object WeatherUi {
     private const val WHITE = 0xFFFFFFFF.toInt()
     private const val GRAY = 0xFFB8BCC6.toInt()
@@ -172,7 +172,7 @@ object WeatherUi {
         return java.text.SimpleDateFormat("EEE", Lang.locale()).format(cal.time)
     }
 
-    /** Üstteki büyük özet: bugün için şu anki durum, yarın/öbür gün için o günün özeti. */
+    /** The big summary on top: the current state for today, the day's summary for tomorrow / the day after. */
     fun summary(ctx: Context, r: WeatherClient.Report, dayOffset: Int, kk: Float): View {
         val d = r.days.getOrNull(dayOffset) ?: r.days.firstOrNull()
         val row = LinearLayout(ctx)

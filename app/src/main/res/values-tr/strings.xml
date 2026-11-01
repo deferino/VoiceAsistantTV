@@ -4,13 +4,13 @@
     <string name="a11y_off">Kapalı – metin sadece panoya kopyalanır. Açmak için OK</string>
     <string name="a11y_on">Açık ✓ (metin odaktaki alana yazılır)</string>
     <string name="a11y_on_unbound">Açık görünüyor, servis henüz bağlanmadı</string>
-    <string name="adb_easy">Kolay yol: bilgisayarda kurulum.bat çalıştır; her şeyi otomatik yapar.</string>
+    <string name="adb_easy">Kolay yol: bilgisayarda install.bat çalıştır; her şeyi otomatik yapar.</string>
     <string name="adb_manual">Elle (adb shell):</string>
     <string name="app_name">Sesli Arama (STT)</string>
     <string name="app_title">Sesli Arama (STT)</string>
-    <string name="assist_other">Başka uygulama (%1$s) – kurulum.bat ile bu uygulamaya ata</string>
+    <string name="assist_other">Başka uygulama (%1$s) – install.bat ile bu uygulamaya ata</string>
     <string name="assist_this">Bu uygulama ✓ (kumandadaki asistan tuşu buraya bağlı)</string>
-    <string name="assist_unassigned">Atanmamış – bilgisayardan kurulum.bat çalıştır</string>
+    <string name="assist_unassigned">Atanmamış – bilgisayardan install.bat çalıştır</string>
     <string name="autosubmit_on">Açık (Android 11+ gerekir)</string>
     <string name="btn_all_in_smarttube">Tüm sonuçlar için SmartTube\'da ara</string>
     <string name="btn_cancel">İptal</string>
@@ -117,7 +117,7 @@
     <string name="pkg_item_other">Başka paket adı yaz…</string>
     <string name="preset_custom">Özel sunucu (OpenAI uyumlu)</string>
     <string name="preset_groq">Groq (ücretsiz katman var)</string>
-    <string name="recog_other">Başka uygulama (%1$s) – kurulum.bat ile ata</string>
+    <string name="recog_other">Başka uygulama (%1$s) – install.bat ile ata</string>
     <string name="results_hint">"Sol/Sağ: kaydır   Yukarı/Aşağı: liste değiştir   OK: aç   Geri: iptal"</string>
     <string name="row_a11y">Metni alana yazma (erişilebilirlik)</string>
     <string name="row_adb">Kurulum komutları (adb)</string>
