@@ -39,6 +39,18 @@ class AssistActivity : Activity(), Transcriber.Listener {
     private var autoFocused = false
     private var choosing = false
     private var transcriber: Transcriber? = null
+    private var musicLink: MusicPlayer.Link? = null
+    /** Another app is being opened / is taking over the sound: the audio focus is released later (see ListenFocus). */
+    private var handedOver = false
+    /** A song request is in flight: the music app may come to the front (Spotify does), which must not end it. */
+    private var musicBusy = false
+    /** This screen is in front (resumed). */
+    private var inFront = false
+    /** The music app started a song in its own screen: when that screen covers this one, go back to the home screen. */
+    private var homeWhenCovered = false
+    private var homeSent = false
+    private var skipA11yHome = false
+    private var homeDelayMs = HOME_DELAY_MS
     private var returnMode = false
     private var testMode = false
     private var done = false
@@ -56,9 +68,55 @@ class AssistActivity : Activity(), Transcriber.Listener {
         setContentView(buildUi())
         // Debug builds only: test without a microphone (adb: am start -n .../.AssistActivity --es debug_text "search")
         val debugText = if (isDebuggable()) intent?.getStringExtra(EXTRA_DEBUG_TEXT) else null
+        // Debug builds only: runs several sentences through the command parsers and logs the result (no side effects).
+        if (isDebuggable()) {
+            intent?.getStringExtra("debug_parse")?.let { list ->
+                for (e in AppIndex.list(this, true)) Log.i("VoiceTV", "app[${e.label}] ${e.pkg} on=${e.pkg !in Config.appsOff}")
+                for (t in list.split('|')) {
+                    val c = VoiceCommands.parse(t)
+                    val spoken = AppIndex.spokenName(t)
+                    val app = if (spoken != null) AppIndex.find(this, spoken) else null
+                    Log.i("VoiceTV", "parse[$t] -> cmd=${VoiceCommands.describe(c)} open=${spoken?.joinToString(" ") ?: "-"} app=${app?.pkg ?: "-"}")
+                }
+                finishAndRemoveTask()
+                return
+            }
+        }
+        // Debug builds only: extra fields for the music "play from search" command, e.g. "focus=vnd.android.cursor.item/audio,artist=Duman".
+        if (isDebuggable()) {
+            skipA11yHome = intent?.getBooleanExtra("debug_no_a11y_home", false) == true
+            intent?.getIntExtra("debug_home_delay", -1)?.takeIf { it >= 0 }?.let { homeDelayMs = it.toLong() }
+            MusicPlayer.debugUri = intent?.getStringExtra("debug_uri")
+            MusicPlayer.debugExtras = intent?.getStringExtra("debug_extras")?.takeIf { it.isNotBlank() }?.let { spec ->
+                Bundle().also { b ->
+                    for (kv in spec.split(',')) {
+                        val i = kv.indexOf('=')
+                        if (i <= 0) continue
+                        val k = kv.substring(0, i).trim()
+                        b.putString(if (k.contains('.')) k else "android.intent.extra.$k", kv.substring(i + 1).trim())
+                    }
+                }
+            }
+        }
+        // Music commands can be given when this is the assistant (not an app's dictation request, not the write-only target).
+        val musicPossible = !returnMode && !testMode && Config.searchTarget != Config.TARGET_WRITE
+        val preApp = if (musicPossible) MusicApps.preconnectApp(this) else null
+        // The Spotify song lookup has its own servers; warm them only if Spotify is the likely app (set, or used lately).
+        val spotifyLikely = musicPossible && SpotifyLookup.configured() &&
+            (MusicApps.chosen(this)?.id == MusicApps.SPOTIFY.id || preApp?.id == MusicApps.SPOTIFY.id)
         // While the user speaks, warm up connections for the next requests (on the assistant path, the search servers too).
-        Prewarm.forAssist(withSearch = !returnMode && !testMode)
+        Prewarm.forAssist(
+            withSearch = !returnMode && !testMode,
+            extra = if (spotifyLikely) SpotifyLookup.prewarmUrls() else emptyList()
+        )
+        // Same idea for the music app: bind its media service while the user speaks (only if a song started there lately).
+        if (musicPossible) {
+            preApp?.let { musicLink = MusicPlayer.connect(this, it) }
+            // Spotify's search token (valid for an hour) is fetched now, not after the command.
+            if (SpotifyLookup.configured()) Thread({ SpotifyLookup.warmUp() }, "spotify-warmup").start()
+        }
         if (!debugText.isNullOrBlank()) {
+            ListenFocus.acquire(this)
             // debug_delay (ms): simulates the speaking time (used to measure the connection warm-up)
             val delay = intent?.getIntExtra("debug_delay", 0)?.toLong() ?: 0L
             handler.postDelayed({ onResult(debugText) }, delay)
@@ -157,7 +215,31 @@ class AssistActivity : Activity(), Transcriber.Listener {
     }
 
     private fun begin() {
-        val t = Transcriber(this)
+        // Quiet the other apps first: music that is playing would be recorded with the voice.
+        ListenFocus.acquire(this)
+        if (ListenFocus.musicActive(this)) waitForQuiet(0) else startListening()
+    }
+
+    /** Gives the player up to ~0.45 s to react to the focus loss before the recording (and its noise measurement) starts. */
+    private fun waitForQuiet(waited: Int) {
+        if (!ListenFocus.musicActive(this) || waited >= 450) {
+            Log.i("VoiceTV", "focus: quiet after $waited ms (music active=${ListenFocus.musicActive(this)})")
+            startListening()
+        } else {
+            handler.postDelayed({ waitForQuiet(waited + 50) }, 50L)
+        }
+    }
+
+    private fun startListening() {
+        // Debug builds only: debug_wav = saved clips to play instead of the microphone, debug_nospec = no early request.
+        val dbg = isDebuggable()
+        val t = Transcriber(
+            this,
+            speculative = !(dbg && intent?.getBooleanExtra("debug_nospec", false) == true),
+            debugFeed = if (dbg) intent?.getStringExtra("debug_wav") else null,
+            // The app names are added to the hint only where the result is routed by name (not for other apps' dictation).
+            promptOverride = if (!returnMode && !testMode && Config.searchTarget != Config.TARGET_WRITE) Config.assistPrompt() else null
+        )
         transcriber = t
         t.start(this)
     }
@@ -200,6 +282,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
 
     override fun onError(code: Transcriber.Code, message: String) {
         done = true
+        ListenFocus.release()
         setStatus(MicView.Mode.ERROR, Lang.s(R.string.st_failed), message)
         if (returnMode) setResult(RESULT_CANCELED)
         if (!testMode) handler.postDelayed({ finishAssist() }, 3500L)
@@ -210,14 +293,209 @@ class AssistActivity : Activity(), Transcriber.Listener {
     private fun routeResult(text: String) {
         // Weather question ("weather in Istanbul", "how is the weather tomorrow in Ankara") -> weather panel only.
         // Left alone in "write to field only" mode; if it is not a weather question, the normal search continues.
-        if (Config.searchTarget != Config.TARGET_WRITE) {
+        val routing = Config.searchTarget != Config.TARGET_WRITE
+        // Utility commands first: "pause", "next song", "volume down", "stop the music in 30 minutes" ...
+        if (routing) {
+            val cmd = VoiceCommands.parse(text)
+            if (cmd != null) {
+                Log.i("VoiceTV", "assist: command ${VoiceCommands.describe(cmd)}")
+                runCommand(cmd)
+                return
+            }
+        }
+        var vr = if (routing) VoiceRoute.parse(text) else null
+        val music = vr?.let { MusicApps.app(it.app, this) }
+        // A general music command ("duman bal cal") needs a music app; without one it is an ordinary search.
+        if (vr != null && vr.app == VoiceRoute.App.MUSIC && music == null) vr = null
+        val link = musicLink
+        if (link != null && (music == null || music.id != link.music.id)) dropMusicLink()
+        if (routing) {
+            // App-prefixed commands: "spotify <song>" / "bitchord <song>" play it; "nuvio <title>" / "smarttube <query>"
+            // only search there; "<song> cal" plays it in the music app chosen in the settings.
+            if (vr != null) {
+                routeApp(vr, music)
+                return
+            }
             val wq = WeatherQuery.parse(text)
             if (wq != null) {
                 showWeather(text, wq)
                 return
             }
+            // "<app> ac" / "open <app>": any installed app that is switched on in Settings > Apps opened by voice.
+            val spoken = AppIndex.spokenName(text)
+            val entry = if (spoken != null) AppIndex.find(this, spoken) else null
+            if (entry != null) {
+                Log.i("VoiceTV", "assist: opening an installed app by name")
+                openApp(entry.label) { AppLauncher.launchPackage(this, entry.pkg) }
+                return
+            }
         }
         routeSearch(text)
+    }
+
+    /** Runs a utility command (see [VoiceCommands]) and shows a short confirmation. */
+    private fun runCommand(c: VoiceCommands.Cmd) {
+        dropMusicLink()
+        var title = ""
+        var sub = ""
+        when (c) {
+            is VoiceCommands.Cmd.MediaKey -> {
+                when (c.key) {
+                    VoiceCommands.Media.PLAY -> {
+                        // Giving the focus back lets the music we paused continue; if nothing was playing, press play.
+                        ListenFocus.release()
+                        handler.postDelayed({
+                            if (!ListenFocus.musicActive(this)) VoiceCommands.sendMedia(this, VoiceCommands.Media.PLAY)
+                        }, 450L)
+                        title = Lang.s(R.string.cmd_resumed)
+                    }
+                    VoiceCommands.Media.PAUSE -> {
+                        VoiceCommands.sendMedia(this, c.key)
+                        title = Lang.s(R.string.cmd_paused)
+                    }
+                    VoiceCommands.Media.NEXT -> {
+                        VoiceCommands.sendMedia(this, c.key)
+                        title = Lang.s(R.string.cmd_next)
+                    }
+                    VoiceCommands.Media.PREVIOUS -> {
+                        VoiceCommands.sendMedia(this, c.key)
+                        title = Lang.s(R.string.cmd_prev)
+                    }
+                }
+            }
+            is VoiceCommands.Cmd.VolumeStep -> {
+                ListenFocus.release() // the music continues, so the change can be heard
+                runVolume { VoiceCommands.stepVolume(applicationContext, c.up) }
+                return
+            }
+            is VoiceCommands.Cmd.VolumeSet -> {
+                ListenFocus.release()
+                runVolume { VoiceCommands.setVolume(applicationContext, c.percent) }
+                return
+            }
+            is VoiceCommands.Cmd.Mute -> {
+                ListenFocus.release()
+                VoiceCommands.setMute(this, c.mute)
+                title = Lang.s(if (c.mute) R.string.cmd_muted else R.string.cmd_unmuted)
+            }
+            is VoiceCommands.Cmd.Timer -> {
+                ListenFocus.release()
+                if (SleepTimer.start(this, c.minutes)) {
+                    title = Lang.s(R.string.cmd_timer_set, durationText(c.minutes))
+                    sub = Lang.s(R.string.cmd_timer_sub)
+                } else {
+                    setStatus(MicView.Mode.ERROR, Lang.s(R.string.cmd_timer_failed), "")
+                    handler.postDelayed({ finishAssist() }, 3000L)
+                    return
+                }
+            }
+            VoiceCommands.Cmd.CancelTimer -> {
+                ListenFocus.release()
+                title = Lang.s(if (SleepTimer.cancel(this)) R.string.cmd_timer_cancelled else R.string.cmd_timer_none)
+            }
+        }
+        setStatus(MicView.Mode.OK, title, sub)
+        handler.postDelayed({ finishAssist() }, 1600L)
+    }
+
+    /** Volume changes are made notch by notch (a second or two), so they run off the main thread and report when they are done. */
+    private fun runVolume(work: () -> Int) {
+        Thread {
+            val pct = try {
+                work()
+            } catch (e: Exception) {
+                Log.w("VoiceTV", "command: volume failed: ${e.message}")
+                -1
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                if (pct >= 0) setStatus(MicView.Mode.OK, Lang.s(R.string.cmd_volume, Lang.pct(pct)), "")
+                handler.postDelayed({ finishAssist() }, 1200L)
+            }
+        }.start()
+    }
+
+    private fun durationText(minutes: Int): String = when {
+        minutes < 60 -> Lang.s(R.string.fmt_dur_min, minutes)
+        minutes % 60 == 0 -> Lang.s(R.string.fmt_dur_hour, minutes / 60)
+        else -> Lang.s(R.string.fmt_dur_hour_min, minutes / 60, minutes % 60)
+    }
+
+    private fun routeApp(r: VoiceRoute.Route, music: MusicApps.App?) {
+        when (r.app) {
+            VoiceRoute.App.BITCHORD, VoiceRoute.App.SPOTIFY, VoiceRoute.App.MUSIC -> {
+                val app = music ?: return
+                if (r.query.isEmpty()) openApp(app.label) { MusicApps.launch(this, app) } else playMusic(app, r.query)
+            }
+            VoiceRoute.App.NUVIO ->
+                if (r.query.isEmpty()) openApp("Nuvio") { AppLauncher.launchNuvio(this) }
+                else showResults(r.query, youtube = false, nuvio = true)
+            VoiceRoute.App.SMARTTUBE ->
+                if (r.query.isEmpty()) openApp("SmartTube") { AppLauncher.launchSmartTube(this) }
+                else openSmartTube(r.query)
+        }
+    }
+
+    private fun dropMusicLink() {
+        musicLink?.close()
+        musicLink = null
+    }
+
+    /** "spotify ac": only the app name was spoken, so just open the app. */
+    private fun openApp(label: String, launch: () -> Boolean) {
+        if (launch()) {
+            handedOver = true
+            setStatus(MicView.Mode.OK, label, Lang.s(R.string.st_app_opening, label))
+            handler.postDelayed({ finishAssist() }, 1200L)
+        } else {
+            setStatus(MicView.Mode.ERROR, Lang.s(R.string.st_app_missing, label), "")
+            handler.postDelayed({ finishAssist() }, 3500L)
+        }
+    }
+
+    private fun playMusic(app: MusicApps.App, query: String) {
+        // Use the connection opened while the user was speaking, or open one now.
+        val link = musicLink?.takeIf { it.music.id == app.id } ?: MusicPlayer.connect(this, app)
+        if (link == null) {
+            setStatus(MicView.Mode.ERROR, Lang.s(R.string.st_app_missing, app.label), Lang.s(R.string.st_music_missing_hint, app.label))
+            handler.postDelayed({ finishAssist() }, 3500L)
+            return
+        }
+        musicLink = link
+        musicBusy = true
+        setStatus(MicView.Mode.PROCESSING, "“$query”", Lang.s(R.string.st_music_searching, app.label))
+        link.play(query) { r ->
+            musicBusy = false
+            if (isFinishing || isDestroyed) return@play
+            if (r.ok) {
+                handedOver = true
+                if (r.resultsShown) {
+                    // The app opened its search results (Spotify TV): the highlighted first result starts with OK.
+                    setStatus(MicView.Mode.OK, "“$query”", Lang.s(R.string.st_music_results, app.label))
+                    handler.postDelayed({ finishAssist() }, 2500L)
+                } else {
+                    setStatus(MicView.Mode.OK, r.title ?: query, Lang.s(R.string.st_music_playing, app.label))
+                    val background = Config.musicBackground(app)
+                    if (app.showsPlayerScreen) {
+                        if (background && !homeSent) {
+                            if (inFront) homeWhenCovered = true else handler.postDelayed({ backToHome() }, homeDelayMs)
+                        }
+                    } else if (!background) {
+                        // The app plays without a screen of its own coming up (BitChord), but the user wants to see it.
+                        MusicApps.launch(this, app)
+                    }
+                    handler.postDelayed({ finishAssist() }, 1800L)
+                }
+            } else {
+                val msg = when (r.error) {
+                    MusicPlayer.Err.MISSING -> Lang.s(R.string.st_music_missing_hint, app.label)
+                    MusicPlayer.Err.CONNECT -> Lang.s(R.string.err_music_connect, app.label)
+                    else -> Lang.s(R.string.err_music_timeout, app.label)
+                }
+                setStatus(MicView.Mode.ERROR, Lang.s(R.string.st_music_failed, app.label), msg)
+                handler.postDelayed({ finishAssist() }, 4500L)
+            }
+        }
     }
 
     private fun routeSearch(text: String) {
@@ -573,6 +851,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
     private fun openSmartTube(text: String) {
         Config.lastTarget = Config.TARGET_SMARTTUBE
         if (AppLauncher.searchSmartTube(this, text)) {
+            handedOver = true
             finishAssist()
         } else {
             showStatusAgain()
@@ -584,6 +863,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
     private fun openVideo(v: YouTubeSearch.Video) {
         Config.lastTarget = Config.TARGET_SMARTTUBE
         if (AppLauncher.openSmartTubeVideo(this, v.id)) {
+            handedOver = true
             finishAssist()
         } else {
             showStatusAgain()
@@ -605,6 +885,7 @@ class AssistActivity : Activity(), Transcriber.Listener {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 if (ok) {
+                    handedOver = true
                     finishAssist()
                 } else {
                     setStatus(MicView.Mode.ERROR, Lang.s(R.string.st_nuvio_open_failed), Lang.s(R.string.st_nuvio_open_hint))
@@ -658,22 +939,65 @@ class AssistActivity : Activity(), Transcriber.Listener {
 
     private fun finishAssist() {
         if (isFinishing) return
+        Log.i("VoiceTV", "assist: finishing")
         AssistSession.close()
         finishAndRemoveTask()
     }
 
+    override fun onResume() {
+        super.onResume()
+        inFront = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        inFront = false
+        // The music app's player screen has just covered this one (see MusicApps.App.showsPlayerScreen): it comes up as soon
+        // as the song was sent as a link, so leave it right away instead of waiting for the song to be confirmed.
+        if (!isFinishing && !homeSent && (homeWhenCovered || playerScreenExpected())) {
+            homeWhenCovered = false
+            handler.postDelayed({ backToHome() }, homeDelayMs)
+        }
+    }
+
+    /** A song went to an app with its own player screen as a link: that screen is about to come to the front. */
+    private fun playerScreenExpected(): Boolean {
+        val l = musicLink ?: return false
+        return l.music.showsPlayerScreen && Config.musicBackground(l.music) && l.playedByLink
+    }
+
+    /** Presses Home (accessibility service if it is on, else a home intent) so the music app's own screen goes away. */
+    private fun backToHome() {
+        if (isDestroyed || homeSent) return
+        homeSent = true
+        val viaA11y = !skipA11yHome && InjectorService.goHome()
+        if (!viaA11y) {
+            try {
+                startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: Exception) {
+                Log.w("VoiceTV", "assist: home intent failed: ${e.message}")
+            }
+        }
+        Log.i("VoiceTV", "assist: back to home (accessibility=$viaA11y)")
+    }
+
     override fun onStop() {
         super.onStop()
+        Log.i("VoiceTV", "assist: onStop (finishing=$isFinishing)")
         // If the user moved elsewhere, stop listening (except while the permission dialog is open)
-        if (!isFinishing && !waitingPermission) {
+        if (!isFinishing && !waitingPermission && !musicBusy) {
             transcriber?.cancel()
             finishAssist()
         }
     }
 
     override fun onDestroy() {
+        Log.i("VoiceTV", "assist: onDestroy")
         handler.removeCallbacksAndMessages(null)
         transcriber?.cancel()
+        dropMusicLink()
+        // Music paused for listening resumes now; if another app takes over, wait so the old music does not flash back on.
+        ListenFocus.release(if (handedOver) 8000L else 0L)
         super.onDestroy()
     }
 
@@ -681,5 +1005,8 @@ class AssistActivity : Activity(), Transcriber.Listener {
         const val EXTRA_TEST = "test"
         const val EXTRA_DEBUG_TEXT = "debug_text"
         private const val REQ_MIC = 1
+
+        /** Pause between the player screen covering this one and the Home press (0-300 ms all worked on the TV). */
+        private const val HOME_DELAY_MS = 150L
     }
 }

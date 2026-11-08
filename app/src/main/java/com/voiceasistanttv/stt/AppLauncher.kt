@@ -138,9 +138,8 @@ object AppLauncher {
         return start(ctx, Uri.parse("nuvio://tmdb/$type/$tmdbId"), pkg)
     }
 
-    /** Opens Nuvio from its home screen (for the test in the settings screen). */
-    fun launchNuvio(ctx: Context): Boolean {
-        val pkg = nuvioPackage(ctx) ?: return false
+    /** Opens an app from its home screen (its TV launcher entry, else the normal one). */
+    fun launchPackage(ctx: Context, pkg: String): Boolean {
         val pm = ctx.packageManager
         val i = pm.getLeanbackLaunchIntentForPackage(pkg) ?: pm.getLaunchIntentForPackage(pkg) ?: return false
         return try {
@@ -149,5 +148,17 @@ object AppLauncher {
         } catch (_: Exception) {
             false
         }
+    }
+
+    /** Opens Nuvio from its home screen (for the test in the settings screen). */
+    fun launchNuvio(ctx: Context): Boolean {
+        val pkg = nuvioPackage(ctx) ?: return false
+        return launchPackage(ctx, pkg)
+    }
+
+    /** Opens SmartTube from its home screen (voice command "smarttube ac"). */
+    fun launchSmartTube(ctx: Context): Boolean {
+        val pkg = smartTubePackage(ctx) ?: return false
+        return launchPackage(ctx, pkg)
     }
 }

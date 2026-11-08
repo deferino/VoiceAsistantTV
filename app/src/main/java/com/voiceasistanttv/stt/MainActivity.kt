@@ -97,6 +97,47 @@ class MainActivity : Activity() {
         row(Lang.s(R.string.row_source), sourceLabel(Config.audioSource)) { pickSource() }
         row(Lang.s(R.string.row_mic_device), deviceLabel()) { pickDevice() }
 
+        header(Lang.s(R.string.hdr_music))
+        row(Lang.s(R.string.row_music_app), musicStatus()) { pickMusicApp() }
+        row(
+            Lang.s(R.string.row_music_screen),
+            Lang.s(if (Config.spotifyBackground) R.string.music_screen_bg else R.string.music_screen_show)
+        ) {
+            choose(
+                Lang.s(R.string.dlg_music_screen),
+                listOf(Lang.s(R.string.music_screen_bg), Lang.s(R.string.music_screen_show)),
+                if (Config.spotifyBackground) 0 else 1
+            ) { Config.spotifyBackground = it == 0 }
+        }
+        row(
+            Lang.s(R.string.row_bitchord_screen),
+            Lang.s(if (Config.bitchordBackground) R.string.bitchord_screen_bg else R.string.bitchord_screen_show)
+        ) {
+            choose(
+                Lang.s(R.string.dlg_bitchord_screen),
+                listOf(Lang.s(R.string.bitchord_screen_bg), Lang.s(R.string.bitchord_screen_show)),
+                if (Config.bitchordBackground) 0 else 1
+            ) { Config.bitchordBackground = it == 0 }
+        }
+        row(
+            Lang.s(R.string.row_spotify_id),
+            if (Config.spotifyId.isBlank()) Lang.s(R.string.spotify_id_none) else maskKey(Config.spotifyId)
+        ) {
+            askText(Lang.s(R.string.dlg_spotify_id), Config.spotifyId, true) { Config.spotifyId = it }
+        }
+        row(Lang.s(R.string.row_spotify_secret), maskKey(Config.spotifySecret)) {
+            askText(Lang.s(R.string.dlg_spotify_secret), Config.spotifySecret, true) { Config.spotifySecret = it }
+        }
+        row(
+            Lang.s(R.string.row_musiclink),
+            if (Config.musicLinkKey.isBlank()) Lang.s(R.string.musiclink_none) else maskKey(Config.musicLinkKey)
+        ) {
+            askText(Lang.s(R.string.dlg_musiclink), Config.musicLinkKey, true) { Config.musicLinkKey = it }
+        }
+
+        header(Lang.s(R.string.hdr_apps))
+        row(Lang.s(R.string.row_apps), appsStatus()) { pickApps() }
+
         header(Lang.s(R.string.hdr_target))
         row(Lang.s(R.string.row_target), targetLabel(Config.searchTarget)) { pickTarget() }
         row(Lang.s(R.string.row_smarttube_pkg), smartTubeStatus()) { pickSmartTube() }
@@ -322,6 +363,105 @@ class MainActivity : Activity() {
                 i == 0 -> onSet("")
                 i <= choices.size -> onSet(choices[i - 1].pkg)
                 else -> askText(Lang.s(R.string.pkg_enter_hint, title), current, false) { onSet(it.replace(" ", "")) }
+            }
+        }
+    }
+
+    /** Subtitle of the music app row: automatic (and which app that is now), or the chosen app and whether it is installed. */
+    private fun musicStatus(): String {
+        val app = MusicApps.forId(Config.musicApp)
+        if (app == null) {
+            val found = MusicApps.chosen(this)
+            return if (found != null) Lang.s(R.string.pkg_auto_found, found.label) else Lang.s(R.string.pkg_auto_none)
+        }
+        val pkg = MusicApps.packageOf(this, app) ?: app.packages.first()
+        val name = if (MusicApps.KNOWN.any { it.id == app.id }) app.label else Lang.s(R.string.pkg_custom)
+        return Lang.s(
+            if (MusicApps.isInstalled(this, app)) R.string.pkg_chosen_installed else R.string.pkg_chosen_missing,
+            name, pkg
+        )
+    }
+
+    /** Subtitle of the "Apps opened by voice" row: how many of the installed apps are switched on. */
+    private fun appsStatus(): String {
+        val all = AppIndex.list(this)
+        if (all.isEmpty()) return Lang.s(R.string.apps_none_found)
+        val off = Config.appsOff
+        val on = all.count { it.pkg !in off }
+        return if (on == all.size) Lang.s(R.string.apps_all, all.size) else Lang.s(R.string.apps_some, on, all.size)
+    }
+
+    /** Check list of the installed apps: the checked ones can be opened by voice ("Netflix ac", "open Prime Video"). */
+    private fun pickApps() {
+        val all = AppIndex.list(this, true)
+        if (all.isEmpty()) {
+            message(Lang.s(R.string.row_apps), Lang.s(R.string.apps_none_found))
+            return
+        }
+        val off = Config.appsOff
+        val checked = BooleanArray(all.size) { all[it].pkg !in off }
+        val dup = all.groupingBy { it.label.lowercase() }.eachCount()
+        val labels = Array(all.size) {
+            val e = all[it]
+            if ((dup[e.label.lowercase()] ?: 0) > 1) e.label + "  (" + e.pkg + ")" else e.label
+        }
+        val dlg = builder()
+            .setTitle(Lang.s(R.string.dlg_apps))
+            .setMultiChoiceItems(labels, checked) { _, which, isChecked -> checked[which] = isChecked }
+            .setPositiveButton(Lang.s(R.string.btn_ok)) { _, _ ->
+                // Keep the choice for apps that are not installed right now (they may come back).
+                val installed = all.map { it.pkg }.toSet()
+                val newOff = HashSet<String>(Config.appsOff.filter { it !in installed })
+                for (i in all.indices) if (!checked[i]) newOff.add(all[i].pkg)
+                Config.appsOff = newOff
+                render()
+            }
+            .setNeutralButton(Lang.s(R.string.apps_clear_all), null)
+            .setNegativeButton(Lang.s(R.string.btn_cancel), null)
+            .create()
+        dlg.show()
+        // The all / none button must not close the dialog.
+        val toggle = dlg.getButton(AlertDialog.BUTTON_NEUTRAL)
+        val refreshLabel = { toggle.text = Lang.s(if (checked.all { it }) R.string.apps_clear_all else R.string.apps_select_all) }
+        refreshLabel()
+        toggle.setOnClickListener {
+            val state = !checked.all { it }
+            for (i in checked.indices) {
+                checked[i] = state
+                dlg.listView.setItemChecked(i, state)
+            }
+            refreshLabel()
+        }
+        dlg.listView.setOnItemClickListener { _, _, which, _ ->
+            checked[which] = dlg.listView.isItemChecked(which)
+            refreshLabel()
+        }
+    }
+
+    /** Music app for general music commands ("duman bal cal"): Automatic, one of the known apps, or a package name. */
+    private fun pickMusicApp() {
+        val known = MusicApps.KNOWN
+        val items = ArrayList<String>()
+        items.add(Lang.s(R.string.pkg_item_auto))
+        for (a in known) {
+            val pkg = MusicApps.packageOf(this, a) ?: a.packages.first()
+            items.add(Lang.s(if (MusicApps.isInstalled(this, a)) R.string.pkg_item_installed else R.string.pkg_item_missing, a.label, pkg))
+        }
+        items.add(Lang.s(R.string.pkg_item_other))
+        val cur = Config.musicApp
+        val sel = when {
+            cur.isEmpty() -> 0
+            else -> known.indexOfFirst { it.id == cur }.let { if (it >= 0) it + 1 else items.size - 1 }
+        }
+        val title = Lang.s(R.string.dlg_music_app)
+        val set = { v: String -> Config.musicApp = v }
+        choose(title, items, sel) { i ->
+            when {
+                i == 0 -> set("")
+                i <= known.size -> set(known[i - 1].id)
+                else -> askText(Lang.s(R.string.pkg_enter_hint, title), if (cur.contains('.')) cur else "", false) {
+                    set(it.replace(" ", ""))
+                }
             }
         }
     }

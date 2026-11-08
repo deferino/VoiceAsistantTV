@@ -37,14 +37,7 @@ class CloudRecognitionService : RecognitionService() {
             ?.let { Locale.forLanguageTag(it).language }
             ?.takeIf { it.isNotBlank() }
 
-        // Keyboard path: the TV's built-in (far-field) microphone is much quieter and a fixed threshold of 500
-        // was cutting off most of the speech. The threshold follows the noise (3x), floor 40; the clip padding is wider.
-        // The assistant-key path (AssistActivity) does NOT use these settings and is unchanged.
-        val t = Transcriber(
-            this, attribution, requested, tag = "keyboard",
-            vadFloor = minOf(Config.vadThreshold, KEYBOARD_VAD_FLOOR),
-            farField = true, sourceOverride = Config.kbAudioSource
-        )
+        val t = Transcriber(this, attribution, requested)
         transcriber = t
         t.start(object : Transcriber.Listener {
             override fun onReady() = safe { listener.readyForSpeech(Bundle()) }
@@ -113,6 +106,5 @@ class CloudRecognitionService : RecognitionService() {
 
     companion object {
         private const val TAG = "VoiceTV"
-        private const val KEYBOARD_VAD_FLOOR = 40
     }
 }

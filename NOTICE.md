@@ -34,10 +34,11 @@ The APK contains no third-party libraries. The app icon, the TV banner and the w
 - Movies and series: Cinemeta (Stremio) and, optionally, TMDB. *This product uses the TMDB API but is not endorsed or certified by TMDB.*
 - Speech recognition: the OpenAI-compatible API chosen by the user (default Groq), used with the **user's own API key**; that provider's terms apply.
 - YouTube search: keyless web search, or an optional YouTube Data API key.
+- Music (optional): [BitChord](https://github.com/kushagrasinghx/BitChord) (GPL-3.0) and Spotify are only controlled through their public media services (the standard Android *play from search* command); none of their code is included here. Spotify needs its own app and your own account. Optional song lookup for Spotify uses public web services under their own terms: Spotify's Web API (your own developer app), Apple's iTunes Search API and MusicLink (your own free key); nothing of theirs is included here.
 
 ## Trademarks
 
-YouTube, SmartTube, Nuvio, Groq, OpenAI, TMDB, Stremio and Open-Meteo are trademarks or products of their respective owners. This project is not affiliated with, endorsed by or sponsored by them, and it does not include their software.
+YouTube, SmartTube, Nuvio, BitChord, Spotify, Apple (iTunes), MusicLink, Groq, OpenAI, TMDB, Stremio and Open-Meteo are trademarks or products of their respective owners. This project is not affiliated with, endorsed by or sponsored by them, and it does not include their software.
 
 ## Screenshots
 

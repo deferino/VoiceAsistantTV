@@ -51,10 +51,11 @@ object Config {
 
     private val stringKeys = setOf(
         "provider", "baseUrl", "apiKey", "model", "language", "prompt", "audioSource", "kbAudioSource", "insertMode",
-        "searchTarget", "tmdbKey", "youtubeKey", "weatherCity", "smartTubePkg", "nuvioPkg", "uiLanguage"
+        "searchTarget", "tmdbKey", "youtubeKey", "weatherCity", "smartTubePkg", "nuvioPkg", "musicApp", "uiLanguage",
+        "spotifyId", "spotifySecret", "musicLinkKey", "appsOff"
     )
     private val intKeys = setOf("silenceMs", "maxSeconds", "noSpeechSeconds", "vadThreshold", "inputDeviceId")
-    private val boolKeys = setOf("autoSubmit")
+    private val boolKeys = setOf("autoSubmit", "spotifyBackground", "bitchordBackground")
 
     private lateinit var prefs: SharedPreferences
 
@@ -143,6 +144,63 @@ object Config {
         get() = str("lastTarget", TARGET_SMARTTUBE)
         set(v) = prefs.edit().putString("lastTarget", v).apply()
 
+    /** Music app for general music commands ("duman bal cal"): "" = automatic, a MusicApps id ("spotify", "bitchord") or a package name. */
+    var musicApp: String
+        get() = str("musicApp", "").trim()
+        set(v) = prefs.edit().putString("musicApp", v.trim()).apply()
+
+    /** Music app a song last started in, and when (ms since epoch, 0 = never): that app is connected ahead for people who use it. */
+    var lastMusicApp: String
+        get() = str("lastMusicApp", "")
+        set(v) = prefs.edit().putString("lastMusicApp", v).apply()
+
+    var lastMusicUse: Long
+        get() = prefs.getLong("lastMusicUse", 0L)
+        set(v) = prefs.edit().putLong("lastMusicUse", v).apply()
+
+    /**
+     * Hint text for the assistant (mic key) path: the user's own prompt plus the app names, so the recognizer writes
+     * "BitChord", "Spotify" ... instead of how they sound in Turkish ("bitçörd", "spotifay").
+     */
+    fun assistPrompt(): String {
+        val own = prompt.trim()
+        return if (own.isEmpty()) VoiceRoute.NAME_HINT else own + " " + VoiceRoute.NAME_HINT
+    }
+
+    /**
+     * Where the music app's own screen is after a song starts by voice. True (default): out of sight, the music plays "in the
+     * background" (Spotify TV brings its screen up by itself, so the app goes back to the home screen right away; BitChord shows
+     * nothing). False: Spotify's screen stays / BitChord's screen is opened.
+     */
+    var spotifyBackground: Boolean
+        get() = bool("spotifyBackground", true)
+        set(v) = prefs.edit().putBoolean("spotifyBackground", v).apply()
+
+    var bitchordBackground: Boolean
+        get() = bool("bitchordBackground", true)
+        set(v) = prefs.edit().putBoolean("bitchordBackground", v).apply()
+
+    /** The setting above for [app] (any other music app: background). */
+    fun musicBackground(app: MusicApps.App): Boolean = when (app.id) {
+        MusicApps.SPOTIFY.id -> spotifyBackground
+        MusicApps.BITCHORD.id -> bitchordBackground
+        else -> true
+    }
+
+    /** Optional Spotify developer app (Client ID + Secret): "spotify <song>" looks the song up with Spotify's search and plays it. */
+    var spotifyId: String
+        get() = str("spotifyId", "")
+        set(v) = prefs.edit().putString("spotifyId", v.trim()).apply()
+
+    var spotifySecret: String
+        get() = str("spotifySecret", "")
+        set(v) = prefs.edit().putString("spotifySecret", v.trim()).apply()
+
+    /** Optional MusicLink key (free, musiclink.one): the other way to find a song's Spotify track (see [SpotifyLookup]). */
+    var musicLinkKey: String
+        get() = str("musicLinkKey", "")
+        set(v) = prefs.edit().putString("musicLinkKey", v.trim()).apply()
+
     /** Optional TMDB key (v3 key or v4 read token): also finds localized (e.g. Turkish) movie titles. */
     var tmdbKey: String
         get() = str("tmdbKey", "")
@@ -167,6 +225,11 @@ object Config {
     var nuvioPkg: String
         get() = str("nuvioPkg", "").trim()
         set(v) = prefs.edit().putString("nuvioPkg", v.trim()).apply()
+
+    /** Packages switched off in "Apps opened by voice" (apps are on by default, so new ones work without a visit to the settings). */
+    var appsOff: Set<String>
+        get() = str("appsOff", "").split(',').map { it.trim() }.filter { it.isNotEmpty() }.toSet()
+        set(v) = prefs.edit().putString("appsOff", v.sorted().joinToString(",")).apply()
 
     /** UI language: auto | tr | en (see Lang). */
     var uiLanguage: String

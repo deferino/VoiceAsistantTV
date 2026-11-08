@@ -35,7 +35,17 @@ class Transcriber(
      */
     private val farField: Boolean = false,
     /** null = Config.audioSource; for experiments (Config.kbAudioSource). */
-    private val sourceOverride: String? = null
+    private val sourceOverride: String? = null,
+    /**
+     * Speculative transcription (assistant path): a short silence after speech already sends the clip to the STT while
+     * recording continues. If the silence lasts, that answer is used right away (the STT time is hidden inside the silence wait);
+     * if speech resumes, the answer is thrown away and nothing is lost but one extra request.
+     */
+    private val speculative: Boolean = false,
+    /** Debug builds only: instead of the microphone, play saved clips (see [DebugFeed]) to test without speaking. */
+    private val debugFeed: String? = null,
+    /** null = Config.prompt. The assistant path adds the app names (see Config.assistPrompt). */
+    private val promptOverride: String? = null
 ) {
     enum class Code { NO_PERMISSION, MIC_UNAVAILABLE, NO_SPEECH, EMPTY, NETWORK, API, CONFIG }
 
@@ -48,8 +58,67 @@ class Transcriber(
         fun onError(code: Code, message: String)
     }
 
+    private val promptText: String get() = promptOverride ?: Config.prompt
+
     private val main = Handler(Looper.getMainLooper())
     private val call = SttClient.Call()
+
+    /**
+     * Debug-only microphone replacement for tests. [spec] is a comma-separated list: file names under files/ (16 kHz mono
+     * 16-bit WAV, such as the saved clip-*.wav; "name@fromMs-toMs" takes a slice) and numbers (ms of silence).
+     * Plays in real time, then silence forever.
+     */
+    private class DebugFeed(private val pcm: ShortArray) {
+        private var pos = 0
+
+        fun read(buf: ShortArray, len: Int): Int {
+            try {
+                Thread.sleep(len * 1000L / SAMPLE_RATE)
+            } catch (_: InterruptedException) {
+            }
+            for (i in 0 until len) buf[i] = if (pos < pcm.size) pcm[pos++] else 0
+            return len
+        }
+
+        companion object {
+            fun load(ctx: Context, spec: String): DebugFeed? = try {
+                val out = ArrayList<Short>()
+                for (part in spec.split(',')) {
+                    val t = part.trim()
+                    val ms = t.toIntOrNull()
+                    if (ms != null) {
+                        repeat(ms * SAMPLE_RATE / 1000) { out.add(0) }
+                    } else {
+                        // name or name@fromMs-toMs (a slice of the clip)
+                        val name = t.substringBefore('@')
+                        val range = t.substringAfter('@', "").split('-')
+                        val b = java.io.File(ctx.filesDir, name).readBytes()
+                        var i = 44 + (range.getOrNull(0)?.toIntOrNull() ?: 0) * SAMPLE_RATE / 1000 * 2
+                        val end = range.getOrNull(1)?.toIntOrNull()?.let { minOf(b.size, 44 + it * SAMPLE_RATE / 1000 * 2) } ?: b.size
+                        while (i + 1 < end) {
+                            out.add(((b[i + 1].toInt() shl 8) or (b[i].toInt() and 0xFF)).toShort())
+                            i += 2
+                        }
+                    }
+                }
+                DebugFeed(out.toShortArray())
+            } catch (e: Exception) {
+                Log.w(TAG, "debug feed failed: ${e.message}")
+                null
+            }
+        }
+    }
+
+    /** One speculative request: the clip range it covers and its (later) answer. */
+    private class Spec(val from: Int, val to: Int, val startedAt: Long, val silenceMs: Long) {
+        @Volatile var result: SttClient.Result? = null
+        @Volatile var finishedAt = 0L
+        @Volatile var stale = false
+        var thread: Thread? = null
+    }
+
+    @Volatile
+    private var specCall: SttClient.Call? = null
 
     @Volatile
     private var stopRequested = false
@@ -77,6 +146,7 @@ class Transcriber(
         cancelled = true
         stopRequested = true
         call.cancel()
+        specCall?.cancel()
     }
 
     private fun post(block: () -> Unit) {
@@ -97,8 +167,9 @@ class Transcriber(
             fail(l, Code.NO_PERMISSION, Lang.s(R.string.err_no_mic_permission))
             return
         }
-        val rec = createRecord()
-        if (rec == null) {
+        val feed = if (debugFeed != null && isDebuggable()) DebugFeed.load(context, debugFeed) else null
+        val rec = if (feed != null) null else createRecord()
+        if (rec == null && feed == null) {
             fail(l, Code.MIC_UNAVAILABLE, Lang.s(R.string.err_mic_open))
             return
         }
@@ -127,10 +198,50 @@ class Transcriber(
         val minThreshold = (vadFloor ?: Config.vadThreshold).toDouble()
         val noiseMul = if (farField) 3.0 else 2.5
         val startMs = SystemClock.elapsedRealtime()
+        // Speculative transcription: start after specAt ms of silence; accept the answer once silence >= acceptAt ms.
+        val specAt = if (speculative) maxOf(400, silenceMs * 2 / 5) else Int.MAX_VALUE
+        val acceptAt = maxOf(specAt, silenceMs * 2 / 3)
+        var spec: Spec? = null
+
+        // The part of the recording that is sent: speech plus a little padding before/after (returns from, to, back-step).
+        fun clipRange(): IntArray {
+            // The threshold ("loud") was cutting off the first quiet sounds of speech ("merhaba" -> "haba"). Also include
+            // the frames just before the frame where speech started that are clearly above the ambient noise.
+            var startSample = firstSpeech
+            var back = 0
+            if (firstSpeechFrame > 0) {
+                val onset = maxOf(minThreshold * 0.25, noise * 2.0)
+                var k = minOf(firstSpeechFrame, lvlStart.size)
+                while (k > 0 && back < (if (farField) 12 else 8) && lvlVal[k - 1] > onset) {
+                    k--
+                    back++
+                }
+                if (back > 0) startSample = lvlStart[k]
+            }
+            val padBefore = frame * (if (farField) 5 else 3)
+            val padAfter = frame * (if (farField) 6 else 4)
+            val from = if (startSample >= 0) maxOf(0, startSample - padBefore) else 0
+            val to = if (lastSpeech >= 0) minOf(n, lastSpeech + padAfter) else n
+            return intArrayOf(from, to, back)
+        }
+
+        fun startSpec(r: IntArray): Spec {
+            val sp = Spec(r[0], r[1], SystemClock.elapsedRealtime(), silentFrames * 100L)
+            val sc = SttClient.Call()
+            specCall = sc
+            val lang = languageOverride ?: Config.language
+            sp.thread = Thread({
+                val wav = Wav.encode(pcm, sp.from, sp.to, SAMPLE_RATE)
+                sp.result = SttClient.transcribe(wav, Config.baseUrl, Config.apiKey, Config.model, lang, promptText, sc)
+                sp.finishedAt = SystemClock.elapsedRealtime()
+            }, "VoiceTV-stt-spec").also { it.isDaemon = true; it.start() }
+            diag("speculative clip: ${(sp.to - sp.from) * 1000L / SAMPLE_RATE} ms after ${sp.silenceMs} ms of silence")
+            return sp
+        }
 
         try {
-            rec.startRecording()
-            if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+            rec?.startRecording()
+            if (rec != null && rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                 fail(l, Code.MIC_UNAVAILABLE, Lang.s(R.string.err_mic_start))
                 return
             }
@@ -138,7 +249,7 @@ class Transcriber(
             diag("start[$tag]: source=${sourceOverride?.takeIf { it.isNotBlank() } ?: Config.audioSource} inputs=[${inputList()}] threshold-floor=${minThreshold.toInt()}")
 
             while (!cancelled) {
-                val r = rec.read(buf, 0, frame)
+                val r = feed?.read(buf, frame) ?: rec!!.read(buf, 0, frame)
                 if (r < 0) {
                     fail(l, Code.MIC_UNAVAILABLE, Lang.s(R.string.err_mic_read, r))
                     return
@@ -151,7 +262,7 @@ class Transcriber(
                 val level = rms(buf, r)
                 if (level > peak) peak = level
                 frames++
-                if (frames == 6) {
+                if (frames == 6 && rec != null) {
                     diag("routing[$tag]: ${routeInfo(rec)}")
                     routeShort = routeShortName(rec)
                 }
@@ -171,6 +282,9 @@ class Transcriber(
                     consecutiveLoud++
                     silentFrames = 0
                     lastSpeech = n
+                    // Speech resumed: the speculative answer no longer covers everything that was said.
+                    spec?.let { it.stale = true }
+                    spec = null
                     if (!speaking && consecutiveLoud >= 2) {
                         speaking = true
                         firstSpeech = maxOf(0, n - consecutiveLoud * frame)
@@ -185,17 +299,22 @@ class Transcriber(
                 val sp = speaking
                 post { l.onLevel(level, sp) }
 
+                if (speaking && spec == null && !stopRequested && silentFrames * 100 >= specAt) {
+                    val r = clipRange()
+                    if (r[1] - r[0] >= SAMPLE_RATE / 3) spec = startSpec(r)
+                }
                 if (stopRequested) break
                 if (speaking && silentFrames * 100 >= silenceMs) break
+                if (speaking && silentFrames * 100 >= acceptAt && spec?.result != null) break
                 if (n >= maxSamples) break
                 if (!speaking && SystemClock.elapsedRealtime() - startMs >= noSpeechMs) break
             }
         } finally {
             try {
-                rec.stop()
+                rec?.stop()
             } catch (_: Exception) {
             }
-            rec.release()
+            rec?.release()
         }
         if (cancelled) return
 
@@ -207,41 +326,52 @@ class Transcriber(
             fail(l, Code.NO_SPEECH, Lang.s(R.string.err_no_speech, peak))
             return
         }
-        // The threshold ("loud") was cutting off the first quiet sounds of speech ("merhaba" -> "haba"). Also include
-        // the frames just before the frame where speech started that are clearly above the ambient noise.
-        var startSample = firstSpeech
-        var back = 0
-        if (firstSpeechFrame > 0) {
-            val onset = maxOf(minThreshold * 0.25, noise * 2.0)
-            var k = minOf(firstSpeechFrame, lvlStart.size)
-            while (k > 0 && back < (if (farField) 12 else 8) && lvlVal[k - 1] > onset) {
-                k--
-                back++
+        // A speculative request that is still valid (no speech after it): its answer is the answer.
+        var res: SttClient.Result? = null
+        var sttMs = 0L
+        var speculativeUsed = false
+        val sp = spec
+        if (sp != null && !sp.stale) {
+            saveDebugClip(pcm, n, routeShort)
+            post { l.onProcessing() }
+            sp.thread?.join(40_000L)
+            if (cancelled) return
+            val r = sp.result
+            if (r is SttClient.Result.Ok) {
+                res = r
+                sttMs = sp.finishedAt - sp.startedAt
+                speculativeUsed = true
+            } else {
+                diag("speculative request failed, retrying normally")
             }
-            if (back > 0) startSample = lvlStart[k]
         }
-        val pre = frame * (if (farField) 5 else 3)
-        val post = frame * (if (farField) 6 else 4)
-        val from = if (startSample >= 0) maxOf(0, startSample - pre) else 0
-        val to = if (lastSpeech >= 0) minOf(n, lastSpeech + post) else n
-        if (to - from < SAMPLE_RATE / 3) {
-            fail(l, Code.EMPTY, Lang.s(R.string.err_too_short, peak))
-            return
+        if (res == null) {
+            val range = clipRange()
+            val from = range[0]
+            val to = range[1]
+            if (to - from < SAMPLE_RATE / 3) {
+                fail(l, Code.EMPTY, Lang.s(R.string.err_too_short, peak))
+                return
+            }
+            diag("sent clip: ${(to - from) * 1000L / SAMPLE_RATE} ms (back-step=${range[2]}, range=${from * 1000L / SAMPLE_RATE}-${to * 1000L / SAMPLE_RATE} ms)")
+            saveDebugClip(pcm, n, routeShort)
+            post { l.onProcessing() }
+            val wav = Wav.encode(pcm, from, to, SAMPLE_RATE)
+            val lang = languageOverride ?: Config.language
+            val sttStart = SystemClock.elapsedRealtime()
+            res = SttClient.transcribe(
+                wav, Config.baseUrl, Config.apiKey, Config.model, lang, promptText, call
+            )
+            sttMs = SystemClock.elapsedRealtime() - sttStart
         }
-
-        diag("sent clip: ${(to - from) * 1000L / SAMPLE_RATE} ms (back-step=$back, range=${from * 1000L / SAMPLE_RATE}-${to * 1000L / SAMPLE_RATE} ms)")
-        saveDebugClip(pcm, n, routeShort)
-        post { l.onProcessing() }
-        val wav = Wav.encode(pcm, from, to, SAMPLE_RATE)
-        val lang = languageOverride ?: Config.language
-        val res = SttClient.transcribe(
-            wav, Config.baseUrl, Config.apiKey, Config.model, lang, Config.prompt, call
-        )
         if (cancelled) return
         when (res) {
             is SttClient.Result.Ok -> {
                 val text = res.text.trim()
-                diag("result: ${text.length} chars", " -> $text")
+                diag(
+                    "result: ${text.length} chars, stt=$sttMs ms, speculative=$speculativeUsed, " +
+                        "silence-wait=${(n - lastSpeech) * 1000L / SAMPLE_RATE} ms", " -> $text"
+                )
                 if (text.isEmpty()) fail(l, Code.EMPTY, Lang.s(R.string.err_not_understood))
                 else post { l.onResult(text) }
             }
@@ -313,10 +443,11 @@ class Transcriber(
     }
 
     /** Debug builds only: keeps the whole raw recording as files/clip-<path>-<n>-<source>.wav (last 8). */
+    private fun isDebuggable(): Boolean =
+        (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
     private fun saveDebugClip(pcm: ShortArray, n: Int, route: String) {
-        val debuggable =
-            (context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        if (!debuggable) return
+        if (!isDebuggable() || debugFeed != null) return
         try {
             val dir = context.filesDir
             val seq = System.currentTimeMillis() / 1000

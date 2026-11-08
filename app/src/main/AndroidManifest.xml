@@ -121,6 +121,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- Fires when the sleep timer ("stop the music in 30 minutes") runs out; only this app's own alarm can reach it. -->
+        <receiver
+            android:name=".SleepTimerReceiver"
+            android:exported="false" />
+
         <!-- Accessibility service that writes the transcribed text into the focused text field (optional) -->
         <service
             android:name=".InjectorService"

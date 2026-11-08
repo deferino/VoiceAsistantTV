@@ -35,6 +35,12 @@ android {
     lint {
         abortOnError false
     }
+    packaging {
+        resources {
+            // Only kotlin-reflect and the Kotlin compiler read these; the app uses neither (~11 KB smaller APK).
+            excludes += ['kotlin/**/*.kotlin_builtins', 'kotlin-tooling-metadata.json']
+        }
+    }
 }
 
 dependencies {

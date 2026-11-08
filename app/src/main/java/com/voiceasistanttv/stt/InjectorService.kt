@@ -37,17 +37,6 @@ class InjectorService : AccessibilityService() {
         super.onDestroy()
     }
 
-    /**
-     * Is there a keyboard (input method) window on screen? Looks only at the window TYPE, reads no
-     * content. null if the service is not ready or the query failed. Used to decide IMMEDIATELY (synchronously)
-     * "is a keyboard open" when the assistant key is pressed.
-     */
-    fun isKeyboardWindowShown(): Boolean? = try {
-        windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
-    } catch (_: Exception) {
-        null
-    }
-
     /** Called when the listening screen closes; waits briefly so that the app underneath can take focus back. */
     fun insertLater(text: String) = attempt(text, 0)
 
@@ -129,5 +118,12 @@ class InjectorService : AccessibilityService() {
 
         @Volatile
         var instance: InjectorService? = null
+
+        /** Presses "Home" through the accessibility service, if it is on. True if the press was sent. */
+        fun goHome(): Boolean = try {
+            instance?.performGlobalAction(GLOBAL_ACTION_HOME) == true
+        } catch (_: Exception) {
+            false
+        }
     }
 }

@@ -15,9 +15,13 @@ import java.net.URL
 object Prewarm {
     private const val TAG = "VoiceTV"
 
-    /** @param withSearch also warm up the search servers (assistant path only; not for dictation requests coming from apps). */
-    fun forAssist(withSearch: Boolean) {
+    /**
+     * @param withSearch also warm up the search servers (assistant path only; not for dictation requests coming from apps).
+     * @param extra more server roots to warm, e.g. the servers of the Spotify song lookup (see [SpotifyLookup.prewarmUrls]).
+     */
+    fun forAssist(withSearch: Boolean, extra: Collection<String> = emptyList()) {
         val urls = LinkedHashSet<String>()
+        urls.addAll(extra)
         origin(Config.baseUrl)?.let { urls.add(it) }
         if (withSearch) {
             val t = Config.searchTarget
