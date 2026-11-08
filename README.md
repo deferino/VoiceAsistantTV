@@ -21,6 +21,15 @@ The app, the installer and the voice commands work in **English and Turkish**
   <img src="docs/img/results.png" width="49%" alt="Search results: SmartTube / YouTube row and Nuvio movies row">
 </p>
 
+Everyday voice commands — volume, sleep timer, music control, and opening apps (Settings › *Apps opened by voice* chooses which apps may be opened):
+
+<p align="center">
+  <img src="docs/img/command-volume.png" width="32%" alt="“set volume to 10” shows Volume 10%">
+  <img src="docs/img/command-timer.png" width="32%" alt="“stop the music in 30 minutes” sets a sleep timer">
+  <img src="docs/img/command-paused.png" width="32%" alt="“pause” pauses the music">
+</p>
+<p align="center"><img src="docs/img/apps-picker.png" width="40%" alt="Settings › Apps opened by voice: untick the apps that must not open by voice"></p>
+
 ## What it does
 
 - **The remote's assistant/microphone key opens this app** (it is set as the default assistant).
